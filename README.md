@@ -5,10 +5,10 @@ Playing around with muxing different tools in order to create am IDE-like termin
 
 ## Stack-ronym: 
 - Helix 
-- Async-std
+- Allacritty
 - Zellij
-- Axum
-- Rhai
+- Atuin
+- 
 - 
 - Surreal
 
