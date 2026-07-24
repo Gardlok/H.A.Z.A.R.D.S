@@ -1,0 +1,14 @@
+layout {
+    tab name="Code" focus=true split_direction="vertical" {
+        pane name="Editor" command="hx"
+        pane name="Console" size="35%" stacked=true {
+            pane name="Shell" expanded=true
+            pane name="Tests"
+            pane name="Logs"
+        }
+    }
+    tab name="Operations" split_direction="vertical" {
+        pane name="System"
+        pane name="Maintenance"
+    }
+}

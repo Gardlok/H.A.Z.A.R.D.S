@@ -1,7 +1,5 @@
-**zellijuice/plugins/**
-**/.cargo/**
-
-
-# Added by cargo
-
-/target
+/target/
+/.dotter/cache/
+/.dotter/cache.toml
+/.dotter/local.toml
+/.hazards/

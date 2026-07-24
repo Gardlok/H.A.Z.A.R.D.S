@@ -1,0 +1,7 @@
+default_layout "hazards"
+pane_frames true
+session_serialization true
+serialize_pane_viewport true
+scrollback_editor "hx"
+copy_on_select false
+mouse_mode false

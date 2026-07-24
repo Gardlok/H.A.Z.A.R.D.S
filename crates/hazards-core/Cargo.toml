@@ -1,0 +1,14 @@
+[package]
+name = "hazards-core"
+description = "Core profile, path, and diagnostic model for HAZARDS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+arsenallspice.workspace = true
+serde.workspace = true
+thiserror.workspace = true

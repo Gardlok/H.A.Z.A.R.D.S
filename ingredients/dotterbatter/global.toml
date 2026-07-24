@@ -1,0 +1,9 @@
+[helixer.files]
+"ingredients/helixer/config.toml" = "~/.config/helix/config.toml"
+
+[alacarte.files]
+"ingredients/alacarte/alacritty.toml" = "~/.config/alacritty/alacritty.toml"
+
+[zellijuice.files]
+"ingredients/zellijuice/config.kdl" = "~/.config/zellij/config.kdl"
+"ingredients/zellijuice/layouts/hazards.kdl" = "~/.config/zellij/layouts/hazards.kdl"

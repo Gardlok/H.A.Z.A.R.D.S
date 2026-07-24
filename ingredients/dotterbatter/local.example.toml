@@ -1,0 +1,6 @@
+# Copy this file to .dotter/local.toml and select packages for the host.
+#
+# Remote hosts intentionally omit alacarte because Alacritty runs on the
+# client machine.
+
+packages = ["helixer", "alacarte", "zellijuice"]
