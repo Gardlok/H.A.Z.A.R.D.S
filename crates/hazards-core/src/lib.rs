@@ -1,5 +1,6 @@
 //! Core domain types shared by HAZARDS front ends.
 
+pub mod acquire;
 pub mod acquisition;
 pub mod doctor;
 pub mod paths;
@@ -7,6 +8,10 @@ pub mod probe;
 pub mod profile;
 pub mod provision;
 
+pub use acquire::{
+    AcquisitionOutcome, AcquisitionReceipt, ArtifactAcquirer, ArtifactPayload, ArtifactSource,
+    HttpArtifactSource, VerifiedArtifact, VerifiedArtifactError,
+};
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
 pub use doctor::{Check, CheckStatus, Doctor};
 pub use paths::{HazardsPaths, PathsError};

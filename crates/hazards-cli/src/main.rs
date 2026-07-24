@@ -1,10 +1,11 @@
-use std::{error::Error, path::PathBuf, process::ExitCode};
+use std::{collections::HashSet, error::Error, io, path::PathBuf, process::ExitCode};
 
 use arsenallspice::{AcquisitionLock, Registry};
-use clap::{Args, Parser, Subcommand};
+use clap::{ArgGroup, Args, Parser, Subcommand};
 use hazards_core::{
-    AcquisitionItem, AcquisitionPlanner, AcquisitionStatus, CheckStatus, Doctor, HazardsPaths,
-    HostKind, Persistence, ProvisionItem, ProvisionPlanner, ProvisionStatus, ResolvedProfile, Role,
+    AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, ArtifactAcquirer,
+    CheckStatus, Doctor, HazardsPaths, HostKind, Persistence, ProvisionItem, ProvisionPlanner,
+    ProvisionStatus, ResolvedProfile, Role, VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -83,6 +84,8 @@ enum ProvisionCommand {
     Plan(ProfileArgs),
     /// Resolve exact integrity-pinned artifacts without retrieving them.
     AcquirePlan(ProfileArgs),
+    /// Download and verify locked artifacts into the private HAZARDS cache.
+    Acquire(AcquireArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -96,6 +99,23 @@ struct ProfileArgs {
     /// Emit machine-readable JSON.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("selection")
+        .required(true)
+        .args(["tool", "all"])
+))]
+struct AcquireArgs {
+    #[command(flatten)]
+    profile: ProfileArgs,
+    /// Acquire one tool by registry identifier; repeat for multiple tools.
+    #[arg(long, value_name = "ID", action = clap::ArgAction::Append)]
+    tool: Vec<String>,
+    /// Acquire every actionable artifact in the resolved profile.
+    #[arg(long, conflicts_with = "tool")]
+    all: bool,
 }
 
 #[derive(Debug, Args)]
@@ -286,8 +306,87 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 }
             }
         }
+        ProvisionCommand::Acquire(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args.profile);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let plan = AcquisitionPlanner::new(&lock, &provision).plan();
+            let selected = select_acquisition_items(&plan, &args)?;
+            let paths = HazardsPaths::from_env()?;
+            let acquirer = ArtifactAcquirer::for_paths(&paths)?;
+            let mut verified = Vec::with_capacity(selected.len());
+
+            for item in selected {
+                eprintln!(
+                    "acquiring {} {} from its locked source...",
+                    item.id, item.target_version
+                );
+                verified.push(acquirer.acquire(item)?);
+            }
+
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&verified)?);
+            } else if verified.is_empty() {
+                println!("no actionable artifacts matched the resolved profile");
+            } else {
+                for artifact in &verified {
+                    print_verified_artifact(artifact);
+                }
+                println!("mode: verified cache only; nothing was extracted or installed");
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
+}
+
+fn select_acquisition_items<'a>(
+    plan: &'a AcquisitionPlan,
+    args: &AcquireArgs,
+) -> Result<Vec<&'a AcquisitionItem>, Box<dyn Error>> {
+    let selected = if args.all {
+        plan.items.iter().collect::<Vec<_>>()
+    } else {
+        let mut seen = HashSet::new();
+        let mut selected = Vec::with_capacity(args.tool.len());
+        for id in &args.tool {
+            if !seen.insert(id) {
+                return Err(cli_error(format!("tool {id} was selected more than once")));
+            }
+            let item = plan
+                .items
+                .iter()
+                .find(|item| &item.id == id)
+                .ok_or_else(|| {
+                    cli_error(format!(
+                        "tool {id} is not actionable for the resolved profile"
+                    ))
+                })?;
+            selected.push(item);
+        }
+        selected
+    };
+
+    if let Some(item) = selected.iter().find(|item| item.artifact.is_none()) {
+        return Err(cli_error(format!(
+            "tool {} has no locked artifact for {}/{}",
+            item.id, plan.platform.os, plan.platform.architecture
+        )));
+    }
+    Ok(selected)
+}
+
+fn print_verified_artifact(artifact: &VerifiedArtifact) {
+    println!(
+        "[{:<10}] {:<12} {}",
+        artifact.receipt.outcome, artifact.receipt.tool_id, artifact.receipt.sha256
+    );
+    println!("             object  {}", artifact.object_path.display());
+    println!("             receipt {}", artifact.receipt_path.display());
+}
+
+fn cli_error(message: impl Into<String>) -> Box<dyn Error> {
+    Box::new(io::Error::other(message.into()))
 }
 
 fn print_provision_item(item: &ProvisionItem) {
@@ -530,6 +629,64 @@ mod tests {
         assert_eq!(args.persistence, Persistence::Local);
         assert_eq!(args.role, Role::Development);
         assert!(args.json);
+    }
+
+    #[test]
+    fn parses_an_explicit_verified_acquisition() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "acquire",
+            "--tool",
+            "zellij",
+            "--tool",
+            "delta",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("acquisition arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::Acquire(args),
+        }) = cli.command
+        else {
+            panic!("expected verified acquisition command");
+        };
+
+        assert_eq!(args.tool, ["zellij", "delta"]);
+        assert!(!args.all);
+        assert!(args.profile.json);
+    }
+
+    #[test]
+    fn verified_acquisition_requires_an_explicit_selection() {
+        let error = Cli::try_parse_from(["hazards", "provision", "acquire"])
+            .expect_err("acquisition without a selection should fail");
+
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
+    }
+
+    #[test]
+    fn verified_acquisition_rejects_tool_and_all_together() {
+        let error = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "acquire",
+            "--tool",
+            "zellij",
+            "--all",
+        ])
+        .expect_err("conflicting selection should fail");
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 
     #[test]
