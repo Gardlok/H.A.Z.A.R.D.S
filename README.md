@@ -9,9 +9,10 @@ remote hosts. It combines proven Rust-based terminal applications with a small
 Rust control plane instead of attempting to replace the shell, SSH, Git, or
 other perfectly serviceable system primitives.
 
-The foundation includes a read-only provision planner. It can report what a
-profile needs and what the current host already has; it cannot yet install
-anything or pretend that a version string is a supply-chain policy.
+The foundation includes a read-only provision planner, exact acquisition
+evidence, a verified quarantine cache, and safe private staging. It can report
+what a profile needs, retrieve only reviewed bytes, and materialize a locked
+payload without executing or installing it.
 
 ## The pantry
 
@@ -64,6 +65,11 @@ $ cargo run -p hazards-cli -- provision acquire \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- provision materialize \
+    --tool zellij \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -106,6 +112,29 @@ a crate, set an executable bit, run a subprocess, modify `PATH`, or write into
 `~/.local/bin`. It has merely admitted some bytes into quarantine after checking
 their paperwork.
 
+`hazards provision materialize` is the next deliberately narrow mutation. It
+requires the same explicit selection, rehashes the locked cache object, and
+reproduces its contents in a private content-addressed staging directory under
+`~/.cache/hazards/staging/sha256`. Archive paths must be safe relative UTF-8
+paths; links, devices, duplicate entries, encrypted ZIP members, and excessive
+entry or expanded sizes are rejected. HAZARDS ignores archived ownership,
+timestamps, and permissions.
+
+The lock names the exact executable payload path, size, and SHA-256 digest.
+After extraction, HAZARDS verifies that identity and the expected Linux ELF
+architecture, inventories the complete staged tree in
+`.hazards-materialization.json`, and records an append-only materialization
+receipt under `~/.local/state/hazards/receipts/materializations`. Existing
+stages are re-created from the verified cache object and compared before a
+`stage_hit` is reported.
+
+Materialization is still not installation. Every staged file is mode `0600`,
+every directory is mode `0700`, and the payload deliberately remains
+non-executable. Nothing is run, replaced, added to `PATH`, or written to
+`~/.local/bin`. Checksummed source crates are refused because they have no
+locked executable payload; reproducible source builds require their own trust
+policy.
+
 ## Build and validate
 
 HAZARDS uses Rust 2024 and supports Rust 1.85 or newer.
@@ -142,12 +171,13 @@ features smuggled into a bootstrap script wearing a fake moustache.
 - [Planning before mutation decision](docs/adr/0003-planning-before-mutation.md)
 - [Acquisition evidence decision](docs/adr/0004-lock-acquisition-evidence.md)
 - [Verified acquisition cache decision](docs/adr/0005-verified-acquisition-cache.md)
+- [Safe materialization decision](docs/adr/0006-safe-materialization.md)
 
 ## Status
 
 The CLI, registry, profile resolver, diagnostic model, read-only provision and
 acquisition planners, verified acquisition cache, Rhai recipe compiler, starter
-pillar configurations, and state schema are functional. Safe materialization
-and installation of external applications, Dotter-driven deployment, SurrealDB
-runtime wiring, Zellij automation, and the Ratatui Arsenal interface follow in
-later phases.
+pillar configurations, safe payload materialization, and state schema are
+functional. Transactional installation of external applications, Dotter-driven
+deployment, SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal
+interface follow in later phases.

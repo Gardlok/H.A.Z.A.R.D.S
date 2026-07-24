@@ -18,13 +18,17 @@ repository = "https://github.com/Gardlok/H.A.Z.A.R.D.S"
 [workspace.dependencies]
 arsenallspice = { path = "crates/arsenallspice" }
 clap = { version = "4.5.41", features = ["derive"] }
+flate2 = "1.1.9"
 hazards-core = { path = "crates/hazards-core" }
+lzma-rust2 = { version = "0.17.0", default-features = false, features = ["std", "xz"] }
 rhai = { version = "1.22.2", features = ["sync"] }
 rhaisour = { path = "crates/rhaisour" }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.141"
 sha2 = "0.10.9"
+tar = { version = "0.4.46", default-features = false }
 tempfile = "3.20.0"
 thiserror = "2.0.12"
 toml = "0.9.2"
 ureq = { version = "3.3.0", default-features = false, features = ["rustls", "platform-verifier", "socks-proxy"] }
+zip = { version = "7.2.0", default-features = false, features = ["deflate-flate2"] }

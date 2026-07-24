@@ -400,7 +400,10 @@ fn validate_expected_artifact(artifact: &LockedArtifact) -> Result<(), VerifiedA
     Ok(())
 }
 
-fn validate_component(field: &'static str, value: &str) -> Result<(), VerifiedArtifactError> {
+pub(crate) fn validate_component(
+    field: &'static str,
+    value: &str,
+) -> Result<(), VerifiedArtifactError> {
     let safe = !value.is_empty()
         && value != "."
         && value != ".."
@@ -452,7 +455,7 @@ fn copy_and_hash(
     Ok((total, format!("{:x}", digest.finalize())))
 }
 
-fn verify_cached_object(
+pub(crate) fn verify_cached_object(
     path: &Path,
     artifact: &LockedArtifact,
 ) -> Result<(), VerifiedArtifactError> {
@@ -485,7 +488,7 @@ fn verify_cached_object(
     Ok(())
 }
 
-fn ensure_private_dir(path: &Path) -> Result<(), VerifiedArtifactError> {
+pub(crate) fn ensure_private_dir(path: &Path) -> Result<(), VerifiedArtifactError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
             return Err(VerifiedArtifactError::UnsafePath {
@@ -516,7 +519,7 @@ fn ensure_private_dir(path: &Path) -> Result<(), VerifiedArtifactError> {
     Ok(())
 }
 
-fn ensure_private_subdirectories(
+pub(crate) fn ensure_private_subdirectories(
     root: &Path,
     components: &[&str],
 ) -> Result<PathBuf, VerifiedArtifactError> {
@@ -529,7 +532,10 @@ fn ensure_private_subdirectories(
     Ok(current)
 }
 
-fn set_private_file_permissions(file: &File, path: &Path) -> Result<(), VerifiedArtifactError> {
+pub(crate) fn set_private_file_permissions(
+    file: &File,
+    path: &Path,
+) -> Result<(), VerifiedArtifactError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -539,7 +545,7 @@ fn set_private_file_permissions(file: &File, path: &Path) -> Result<(), Verified
     Ok(())
 }
 
-fn sync_directory(path: &Path) -> Result<(), VerifiedArtifactError> {
+pub(crate) fn sync_directory(path: &Path) -> Result<(), VerifiedArtifactError> {
     let directory = OpenOptions::new()
         .read(true)
         .open(path)
@@ -674,6 +680,9 @@ mod tests {
                 sha256: sha256(body),
                 url: url.to_owned(),
                 evidence: DigestEvidence::GithubAssetDigest,
+                payload_path: Some("zellij".to_owned()),
+                payload_size: Some(body.len() as u64),
+                payload_sha256: Some(sha256(body)),
             }),
             detail: String::new(),
         }

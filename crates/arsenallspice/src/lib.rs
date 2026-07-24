@@ -114,6 +114,12 @@ pub struct LockedArtifact {
     pub sha256: String,
     pub url: String,
     pub evidence: DigestEvidence,
+    #[serde(default)]
+    pub payload_path: Option<String>,
+    #[serde(default)]
+    pub payload_size: Option<u64>,
+    #[serde(default)]
+    pub payload_sha256: Option<String>,
 }
 
 /// How the pinned bytes are distributed upstream.
@@ -305,7 +311,7 @@ impl AcquisitionLock {
     }
 
     pub fn validate(&self, registry: &Registry) -> Result<(), AcquisitionError> {
-        if self.schema_version != 1 {
+        if self.schema_version != 2 {
             return Err(AcquisitionError::UnsupportedSchema(self.schema_version));
         }
         if self.observed_at.trim().is_empty() {
@@ -473,6 +479,20 @@ fn validate_artifact(
         return Err(invalid("source URL must use HTTPS"));
     }
 
+    let payload = match (
+        artifact.payload_path.as_deref(),
+        artifact.payload_size,
+        artifact.payload_sha256.as_deref(),
+    ) {
+        (Some(path), Some(size), Some(sha256)) => Some((path, size, sha256)),
+        (None, None, None) => None,
+        _ => {
+            return Err(invalid(
+                "payload path, size, and SHA-256 must be declared together",
+            ));
+        }
+    };
+
     match (artifact.method, artifact.format, artifact.evidence) {
         (
             AcquisitionMethod::GithubRelease,
@@ -484,7 +504,32 @@ fn validate_artifact(
                 && artifact.url.starts_with(&format!(
                     "https://github.com/{}/releases/download/",
                     install.locator
-                )) => {}
+                )) =>
+        {
+            let Some((path, size, sha256)) = payload else {
+                return Err(invalid(
+                    "GitHub release artifact must declare an executable payload",
+                ));
+            };
+            if !safe_relative_payload_path(path) {
+                return Err(invalid("payload path is not a safe relative path"));
+            }
+            if size == 0 {
+                return Err(invalid("payload size is zero"));
+            }
+            if !valid_sha256(sha256) {
+                return Err(invalid(
+                    "payload SHA-256 must be 64 lowercase hex characters",
+                ));
+            }
+            if artifact.format == ArtifactFormat::Binary
+                && (size != artifact.size || sha256 != artifact.sha256)
+            {
+                return Err(invalid(
+                    "binary payload size and SHA-256 must equal the artifact",
+                ));
+            }
+        }
         (
             AcquisitionMethod::CargoRegistry,
             ArtifactFormat::Crate,
@@ -494,11 +539,35 @@ fn validate_artifact(
                 == format!(
                     "https://crates.io/api/v1/crates/{}/{}/download",
                     install.locator, install.target_version
-                ) => {}
+                ) =>
+        {
+            if payload.is_some() {
+                return Err(invalid(
+                    "source artifact cannot declare an executable payload",
+                ));
+            }
+        }
         _ => return Err(invalid("method, format, evidence, and URL do not agree")),
     }
 
     Ok(())
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn safe_relative_payload_path(value: &str) -> bool {
+    use std::path::{Component, Path};
+
+    !value.is_empty()
+        && !value.contains('\\')
+        && Path::new(value)
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
 }
 
 #[cfg(test)]
@@ -586,13 +655,20 @@ mod tests {
         let lock =
             AcquisitionLock::embedded(&registry).expect("embedded acquisition lock should parse");
 
-        assert_eq!(lock.schema_version, 1);
+        assert_eq!(lock.schema_version, 2);
         assert_eq!(lock.artifacts.len(), 24);
         assert_eq!(
             lock.select("zellij", "0.44.3", "linux", "x86_64")
                 .expect("Zellij x86_64 artifact should exist")
                 .format,
             ArtifactFormat::TarGz
+        );
+        assert_eq!(
+            lock.select("zellij", "0.44.3", "linux", "x86_64")
+                .expect("Zellij x86_64 artifact should exist")
+                .payload_path
+                .as_deref(),
+            Some("zellij")
         );
         assert_eq!(
             lock.select("alacritty", "0.17.0", "linux", "aarch64")
@@ -639,6 +715,36 @@ mod tests {
             AcquisitionError::InvalidArtifact {
                 id: "helix".to_owned(),
                 reason: "SHA-256 digest must be 64 lowercase hex characters".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn acquisition_lock_rejects_unsafe_or_partial_payload_identity() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+        let unsafe_path = EMBEDDED_ACQUISITIONS.replacen(
+            "payload_path = \"zellij\"",
+            "payload_path = \"../zellij\"",
+            1,
+        );
+        let error = AcquisitionLock::parse(&unsafe_path, &registry)
+            .expect_err("unsafe payload path should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::InvalidArtifact {
+                id: "zellij".to_owned(),
+                reason: "payload path is not a safe relative path".to_owned(),
+            }
+        );
+
+        let partial = EMBEDDED_ACQUISITIONS.replacen("payload_size = 51836080\n", "", 1);
+        let error =
+            AcquisitionLock::parse(&partial, &registry).expect_err("partial payload should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::InvalidArtifact {
+                id: "zellij".to_owned(),
+                reason: "payload path, size, and SHA-256 must be declared together".to_owned(),
             }
         );
     }

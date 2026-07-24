@@ -4,8 +4,8 @@ use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser, Subcommand};
 use hazards_core::{
     AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, ArtifactAcquirer,
-    CheckStatus, Doctor, HazardsPaths, HostKind, Persistence, ProvisionItem, ProvisionPlanner,
-    ProvisionStatus, ResolvedProfile, Role, VerifiedArtifact,
+    CheckStatus, Doctor, HazardsPaths, HostKind, Materializer, Persistence, ProvisionItem,
+    ProvisionPlanner, ProvisionStatus, ResolvedProfile, Role, StagedArtifact, VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -86,6 +86,8 @@ enum ProvisionCommand {
     AcquirePlan(ProfileArgs),
     /// Download and verify locked artifacts into the private HAZARDS cache.
     Acquire(AcquireArgs),
+    /// Safely reproduce verified artifacts in private, non-executable staging.
+    Materialize(AcquireArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -336,6 +338,36 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 println!("mode: verified cache only; nothing was extracted or installed");
             }
         }
+        ProvisionCommand::Materialize(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args.profile);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let plan = AcquisitionPlanner::new(&lock, &provision).plan();
+            let selected = select_acquisition_items(&plan, &args)?;
+            let paths = HazardsPaths::from_env()?;
+            let materializer = Materializer::for_paths(&paths);
+            let mut staged = Vec::with_capacity(selected.len());
+
+            for item in selected {
+                eprintln!(
+                    "materializing {} {} from its verified cache object...",
+                    item.id, item.target_version
+                );
+                staged.push(materializer.materialize(item)?);
+            }
+
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&staged)?);
+            } else {
+                for artifact in &staged {
+                    print_staged_artifact(artifact);
+                }
+                println!(
+                    "mode: private staging only; payloads remain non-executable and uninstalled"
+                );
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -383,6 +415,29 @@ fn print_verified_artifact(artifact: &VerifiedArtifact) {
     );
     println!("             object  {}", artifact.object_path.display());
     println!("             receipt {}", artifact.receipt_path.display());
+}
+
+fn print_staged_artifact(artifact: &StagedArtifact) {
+    println!(
+        "[{:<12}] {:<12} {}",
+        artifact.receipt.outcome, artifact.receipt.tool_id, artifact.receipt.payload_sha256
+    );
+    println!(
+        "               stage    {}",
+        artifact.staging_path.display()
+    );
+    println!(
+        "               payload  {}",
+        artifact.payload_path.display()
+    );
+    println!(
+        "               manifest {}",
+        artifact.manifest_path.display()
+    );
+    println!(
+        "               receipt  {}",
+        artifact.receipt_path.display()
+    );
 }
 
 fn cli_error(message: impl Into<String>) -> Box<dyn Error> {
@@ -687,6 +742,36 @@ mod tests {
         .expect_err("conflicting selection should fail");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn parses_an_explicit_safe_materialization() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "materialize",
+            "--tool",
+            "dotter",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("materialization arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::Materialize(args),
+        }) = cli.command
+        else {
+            panic!("expected safe materialization command");
+        };
+
+        assert_eq!(args.tool, ["dotter"]);
+        assert!(!args.all);
+        assert!(args.profile.json);
     }
 
     #[test]

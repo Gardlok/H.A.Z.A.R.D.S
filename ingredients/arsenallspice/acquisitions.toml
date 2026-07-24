@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 observed_at = "2026-07-24"
 
 [[artifacts]]
@@ -26,6 +26,9 @@ size = 13444334
 sha256 = "13fc31e9f40fcc97b28c626adf4015eed080b5d8d8df31bb23e8ddf504d19d59"
 url = "https://github.com/atuinsh/atuin/releases/download/v18.17.1/atuin-aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "atuin-aarch64-unknown-linux-musl/atuin"
+payload_size = 30776960
+payload_sha256 = "5cb8f026672279f07f6718d9172db5ac037c3e22f2bda388d9d016df36feaab7"
 
 [[artifacts]]
 tool_id = "atuin"
@@ -39,6 +42,9 @@ size = 14317342
 sha256 = "5772df4121174a9f0b71c17260727794fde22a71b5a3ee5ac07b227eebcbfa9a"
 url = "https://github.com/atuinsh/atuin/releases/download/v18.17.1/atuin-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "atuin-x86_64-unknown-linux-musl/atuin"
+payload_size = 34918080
+payload_sha256 = "7cb25e596ab0cbdbeccd380b7601b88da8f19b9ae8db5325f190e27e8b85a84d"
 
 [[artifacts]]
 tool_id = "bat"
@@ -52,6 +58,9 @@ size = 3383478
 sha256 = "6369242c584065f195fb20cb36fbd7cb63ae690605bbe89868a7596b596c2c23"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "bat-v0.26.1-aarch64-unknown-linux-musl/bat"
+payload_size = 6037360
+payload_sha256 = "ba7c30e56a3de25fead14f9d2fa8bdde9dd974a118e367e0de6748c7322a4ae8"
 
 [[artifacts]]
 tool_id = "bat"
@@ -65,6 +74,9 @@ size = 3584928
 sha256 = "0dcd8ac79732c0d5b136f11f4ee00e581440e16a44eab5b3105b611bbf2cf191"
 url = "https://github.com/sharkdp/bat/releases/download/v0.26.1/bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "bat-v0.26.1-x86_64-unknown-linux-musl/bat"
+payload_size = 6910848
+payload_sha256 = "fe686142ae007618f92a9ece304bf5a83499436447ddb983baa1c144566451d2"
 
 [[artifacts]]
 tool_id = "bottom"
@@ -78,6 +90,9 @@ size = 1910769
 sha256 = "6a961c62cae136b83383e677550ba52b73e11bae2cdbb4d635be6a98e184b75e"
 url = "https://github.com/ClementTsang/bottom/releases/download/0.14.6/bottom_aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "btm"
+payload_size = 4259752
+payload_sha256 = "6bdd8f0d7f2532e85184be362914d3f98b1d650aa7a4c1522871e94baabc2d1d"
 
 [[artifacts]]
 tool_id = "bottom"
@@ -91,6 +106,9 @@ size = 2117542
 sha256 = "ecddd87701e5d4599f7a3e2728719842bcd7c4ac4f87b0cfd53ce0733a328dad"
 url = "https://github.com/ClementTsang/bottom/releases/download/0.14.6/bottom_x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "btm"
+payload_size = 5206544
+payload_sha256 = "afca290d6cb838a8497a4e8d32ad9820fcd43dc33178f4e041dfaa2091d47b2e"
 
 [[artifacts]]
 tool_id = "delta"
@@ -104,6 +122,9 @@ size = 3166854
 sha256 = "0bfce159a5cddd5feb3d6db4a616d883ff51253ce08ac7ec11cb1d208cfaab9e"
 url = "https://github.com/dandavison/delta/releases/download/0.19.2/delta-0.19.2-aarch64-unknown-linux-gnu.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "delta-0.19.2-aarch64-unknown-linux-gnu/delta"
+payload_size = 6489632
+payload_sha256 = "3eefca53c4359c3d51b1a42f0fbaa9168d2fae8aa89a0cd7a57996209a149d1c"
 
 [[artifacts]]
 tool_id = "delta"
@@ -117,6 +138,9 @@ size = 3403232
 sha256 = "f1ea01ca7728ce3462debc359f39dfc7cbbc1a63224b71fefabf92042864aa1b"
 url = "https://github.com/dandavison/delta/releases/download/0.19.2/delta-0.19.2-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "delta-0.19.2-x86_64-unknown-linux-musl/delta"
+payload_size = 7202656
+payload_sha256 = "1083ee35cc4c0dbf6f9523f85aa08879214053836c850139667dcc057dc4f680"
 
 [[artifacts]]
 tool_id = "dotter"
@@ -130,6 +154,9 @@ size = 4099136
 sha256 = "6efc68bf72313db462a72810b9c2d33edcf04d9b10382f564c46f9aaf942c979"
 url = "https://github.com/SuperCuber/dotter/releases/download/v0.13.5/dotter-linux-arm64-musl"
 evidence = "github_asset_digest"
+payload_path = "dotter"
+payload_size = 4099136
+payload_sha256 = "6efc68bf72313db462a72810b9c2d33edcf04d9b10382f564c46f9aaf942c979"
 
 [[artifacts]]
 tool_id = "dotter"
@@ -143,6 +170,9 @@ size = 5349056
 sha256 = "a79e1ef325d4ecb3e3fffe3dd961f6f854cc45e2eb82755d3be23cdfe0603211"
 url = "https://github.com/SuperCuber/dotter/releases/download/v0.13.5/dotter-linux-x64-musl"
 evidence = "github_asset_digest"
+payload_path = "dotter"
+payload_size = 5349056
+payload_sha256 = "a79e1ef325d4ecb3e3fffe3dd961f6f854cc45e2eb82755d3be23cdfe0603211"
 
 [[artifacts]]
 tool_id = "fd"
@@ -156,6 +186,9 @@ size = 1604562
 sha256 = "f32d3657473fba74e2600babc8db0b93420d51169223b7e8143b2ed55d8fd9e8"
 url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "fd-v10.4.2-aarch64-unknown-linux-musl/fd"
+payload_size = 3433480
+payload_sha256 = "4e1d705572dc91d88347d53f0ae49d10ba6f3961a27efaf1a8100a233d530621"
 
 [[artifacts]]
 tool_id = "fd"
@@ -169,6 +202,9 @@ size = 1754511
 sha256 = "e3257d48e29a6be965187dbd24ce9af564e0fe67b3e73c9bdcd180f4ec11bdde"
 url = "https://github.com/sharkdp/fd/releases/download/v10.4.2/fd-v10.4.2-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "fd-v10.4.2-x86_64-unknown-linux-musl/fd"
+payload_size = 4142816
+payload_sha256 = "78d315b3ed7bb8cc42052880c7be02454ad5324c7c853c291c53b0aaf6f4367b"
 
 [[artifacts]]
 tool_id = "helix"
@@ -182,6 +218,9 @@ size = 15607936
 sha256 = "ce23fa8d395e633e3e54c052012f11965d91d8d5c2bfa659685f50430b4f8175"
 url = "https://github.com/helix-editor/helix/releases/download/25.07.1/helix-25.07.1-aarch64-linux.tar.xz"
 evidence = "github_asset_digest"
+payload_path = "helix-25.07.1-aarch64-linux/hx"
+payload_size = 16640296
+payload_sha256 = "368c5b3388d4efe0eacbcfae06586b75e3722d1644e5f08082aa0d1618eadcf6"
 
 [[artifacts]]
 tool_id = "helix"
@@ -195,6 +234,9 @@ size = 16636076
 sha256 = "3f08e63ecd388fff657ad39722f88bb03dcf326f1f2da2700d99e1dc40ab2e8b"
 url = "https://github.com/helix-editor/helix/releases/download/25.07.1/helix-25.07.1-x86_64-linux.tar.xz"
 evidence = "github_asset_digest"
+payload_path = "helix-25.07.1-x86_64-linux/hx"
+payload_size = 19020248
+payload_sha256 = "18b6db41236f1b9731511288448a5d02fbdee750e925f94471b88aa73b9c937a"
 
 [[artifacts]]
 tool_id = "mise"
@@ -208,6 +250,9 @@ size = 33281921
 sha256 = "585a240287f35a70ad996d348aff0d464e81b51e97e8837de66e30bde188b546"
 url = "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-linux-arm64-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "mise/bin/mise"
+payload_size = 90176648
+payload_sha256 = "93d3aa7e6351e7615a4783809a8d73e347d40d3956285f236341a3ebd755999f"
 
 [[artifacts]]
 tool_id = "mise"
@@ -221,6 +266,9 @@ size = 30681272
 sha256 = "044157d43a442e3e48aab7d5da3ea0fa40250f53532a6024f93dffa37393a2ac"
 url = "https://github.com/jdx/mise/releases/download/v2026.7.11/mise-v2026.7.11-linux-x64-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "mise/bin/mise"
+payload_size = 92307168
+payload_sha256 = "904896399722568d66589a45d928dee1094c03a4a1746176aeb42bf3c5f11233"
 
 [[artifacts]]
 tool_id = "procs"
@@ -234,6 +282,9 @@ size = 2179070
 sha256 = "891855dff3143fd3620c06eb68bd63e94114dd2e369107b455d48bf60cc1464c"
 url = "https://github.com/dalance/procs/releases/download/v0.14.11/procs-v0.14.11-aarch64-linux.zip"
 evidence = "github_asset_digest"
+payload_path = "procs"
+payload_size = 5668976
+payload_sha256 = "307cc4935ef14084d03f6d78df9c0c1fa8885781359ec668df25066f7d555ea4"
 
 [[artifacts]]
 tool_id = "procs"
@@ -247,6 +298,9 @@ size = 2352017
 sha256 = "9c4faecf85a3af4d3d39aae47d04fa31d0a6eb0a239039f68d3f55043f04f974"
 url = "https://github.com/dalance/procs/releases/download/v0.14.11/procs-v0.14.11-x86_64-linux.zip"
 evidence = "github_asset_digest"
+payload_path = "procs"
+payload_size = 6294984
+payload_sha256 = "0ca15ad94a03c821802604d4eab16a6409905c80ec032863b46fd88282ba9f29"
 
 [[artifacts]]
 tool_id = "ripgrep"
@@ -260,6 +314,9 @@ size = 1982561
 sha256 = "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "ripgrep-15.2.0-aarch64-unknown-linux-musl/rg"
+payload_size = 4466000
+payload_sha256 = "c14cdb389f34e504d69e386cfc67d5c5d9a730a990de03ca6910b2a15e30386a"
 
 [[artifacts]]
 tool_id = "ripgrep"
@@ -273,6 +330,9 @@ size = 2265718
 sha256 = "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
 url = "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "ripgrep-15.2.0-x86_64-unknown-linux-musl/rg"
+payload_size = 5408904
+payload_sha256 = "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849"
 
 [[artifacts]]
 tool_id = "tokei"
@@ -299,6 +359,9 @@ size = 17577372
 sha256 = "15e6534d42644d66973d136c590c49739dcfd6a1a2a0d3d917973f16c81b45fb"
 url = "https://github.com/zellij-org/zellij/releases/download/v0.44.3/zellij-aarch64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "zellij"
+payload_size = 45338280
+payload_sha256 = "439ed44da5df3cd70e578dc4aef5a67dc7b81eabdddec27969d84a6be380b2f0"
 
 [[artifacts]]
 tool_id = "zellij"
@@ -312,3 +375,6 @@ size = 18260479
 sha256 = "0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751"
 url = "https://github.com/zellij-org/zellij/releases/download/v0.44.3/zellij-x86_64-unknown-linux-musl.tar.gz"
 evidence = "github_asset_digest"
+payload_path = "zellij"
+payload_size = 51836080
+payload_sha256 = "397481870c4fc3bae646cd7613cde3a1cebdc204558a6cb9a7c603d4c852fc90"
