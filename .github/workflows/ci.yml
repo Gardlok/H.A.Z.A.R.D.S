@@ -28,6 +28,7 @@ jobs:
           cargo run -p hazards-cli -- about
           cargo run -p hazards-cli -- arsenal list
           cargo run -p hazards-cli -- profile resolve --host remote --persistence ghost --role operations
+          cargo run -p hazards-cli -- provision plan --host remote --persistence ghost --role operations --json
           cargo run -p hazards-cli -- recipe check
 
   msrv:

@@ -18,6 +18,7 @@
 - [ ] Project discovery with explicit root allowlists
 - [ ] Zellij create/attach/resurrect commands
 - [ ] Dotter profile generation and dry-run deployment
+- [x] Profile-aware read-only provision planning
 - [ ] Tool manifest with pinned release checksums
 - [ ] Binary release bootstrap and rollback
 

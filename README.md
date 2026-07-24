@@ -9,8 +9,9 @@ remote hosts. It combines proven Rust-based terminal applications with a small
 Rust control plane instead of attempting to replace the shell, SSH, Git, or
 other perfectly serviceable system primitives.
 
-This branch establishes the foundation. It does not yet install every pillar or
-pretend that an empty module is an orchestration platform.
+The foundation includes a read-only provision planner. It can report what a
+profile needs and what the current host already has; it cannot yet install
+anything or pretend that a version string is a supply-chain policy.
 
 ## The pantry
 
@@ -45,6 +46,15 @@ $ cargo run -p hazards-cli -- doctor \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- provision plan \
+    --host desktop \
+    --persistence local \
+    --role development
+$ cargo run -p hazards-cli -- provision plan \
+    --host remote \
+    --persistence ghost \
+    --role operations \
+    --json
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -57,6 +67,14 @@ The profile model is composed from three independent dimensions:
 This avoids breeding a herd of nearly identical configuration files. Ghost
 profiles disable persistent and synchronized state; remote profiles omit
 Alacritty because the terminal emulator belongs on the client machine.
+
+The provision planner resolves only the applications selected by that profile,
+then classifies each as `installed`, `outdated`, `missing`, `planned`, or
+`unsupported`. It probes executables directly with argument vectors from the
+validated Arsenal registry—never through a shell—and recognizes Debian's
+`fdfind` and `batcat` command names. Release versions in the registry are
+advisory planning targets. No archive is downloaded and no command, dotfile, or
+database is modified.
 
 ## Build and validate
 
@@ -90,10 +108,12 @@ foundation PR wearing a fake moustache.
 - [Roadmap](docs/ROADMAP.md)
 - [Stack-ronym decision](docs/adr/0001-stack-ronym.md)
 - [State ownership decision](docs/adr/0002-state-ownership.md)
+- [Planning before mutation decision](docs/adr/0003-planning-before-mutation.md)
 
 ## Status
 
-The CLI, registry, profile resolver, diagnostic model, Rhai recipe compiler,
-starter pillar configurations, and state schema are functional. Installation
-of external applications, Dotter-driven deployment, SurrealDB runtime wiring,
-Zellij automation, and the Ratatui Arsenal interface follow in later phases.
+The CLI, registry, profile resolver, diagnostic model, read-only provision
+planner, Rhai recipe compiler, starter pillar configurations, and state schema
+are functional. Verified installation of external applications, Dotter-driven
+deployment, SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal
+interface follow in later phases.

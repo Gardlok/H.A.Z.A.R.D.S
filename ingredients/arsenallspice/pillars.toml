@@ -1,4 +1,4 @@
-schema_version = 1
+schema_version = 2
 
 [[pillars]]
 letter = "H"
@@ -9,6 +9,13 @@ kind = "external"
 command = "hx"
 summary = "Editing and language tooling"
 
+[pillars.install]
+source = "github_release"
+locator = "helix-editor/helix"
+target_version = "25.07.1"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[pillars]]
 letter = "A"
 id = "alacritty"
@@ -18,6 +25,13 @@ kind = "external"
 command = "alacritty"
 summary = "Local terminal presentation"
 
+[pillars.install]
+source = "github_release"
+locator = "alacritty/alacritty"
+target_version = "0.17.0"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[pillars]]
 letter = "Z"
 id = "zellij"
@@ -26,6 +40,13 @@ ingredient = "zellijuice"
 kind = "external"
 command = "zellij"
 summary = "Sessions, panes, layouts, and remote continuity"
+
+[pillars.install]
+source = "github_release"
+locator = "zellij-org/zellij"
+target_version = "0.44.3"
+destination = "~/.local/bin"
+platforms = ["linux"]
 
 [[pillars]]
 letter = "A"
@@ -52,6 +73,13 @@ kind = "external"
 command = "dotter"
 summary = "Profile-aware configuration deployment"
 
+[pillars.install]
+source = "github_release"
+locator = "SuperCuber/dotter"
+target_version = "0.13.5"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[pillars]]
 letter = "S"
 id = "surrealdb"
@@ -66,23 +94,53 @@ name = "Atuin"
 command = "atuin"
 summary = "Contextual shell history and optional encrypted synchronization"
 
+[providers.install]
+source = "github_release"
+locator = "atuinsh/atuin"
+target_version = "18.17.1"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[providers]]
 id = "ripgrep"
 name = "ripgrep"
 command = "rg"
 summary = "Fast recursive text search"
 
+[providers.install]
+source = "github_release"
+locator = "BurntSushi/ripgrep"
+target_version = "15.2.0"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[providers]]
 id = "fd"
 name = "fd"
 command = "fd"
+aliases = ["fdfind"]
 summary = "Fast filesystem search"
+
+[providers.install]
+source = "github_release"
+locator = "sharkdp/fd"
+target_version = "10.4.2"
+destination = "~/.local/bin"
+platforms = ["linux"]
 
 [[providers]]
 id = "bat"
 name = "bat"
 command = "bat"
+aliases = ["batcat"]
 summary = "Syntax-aware file viewing"
+
+[providers.install]
+source = "github_release"
+locator = "sharkdp/bat"
+target_version = "0.26.1"
+destination = "~/.local/bin"
+platforms = ["linux"]
 
 [[providers]]
 id = "delta"
@@ -90,11 +148,25 @@ name = "Delta"
 command = "delta"
 summary = "Syntax-aware Git and diff paging"
 
+[providers.install]
+source = "github_release"
+locator = "dandavison/delta"
+target_version = "0.19.2"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[providers]]
 id = "mise"
 name = "mise"
 command = "mise"
 summary = "Project toolchain, environment, and task management"
+
+[providers.install]
+source = "github_release"
+locator = "jdx/mise"
+target_version = "2026.7.11"
+destination = "~/.local/bin"
+platforms = ["linux"]
 
 [[providers]]
 id = "bottom"
@@ -102,14 +174,35 @@ name = "bottom"
 command = "btm"
 summary = "Interactive system monitoring"
 
+[providers.install]
+source = "github_release"
+locator = "ClementTsang/bottom"
+target_version = "0.14.6"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[providers]]
 id = "procs"
 name = "procs"
 command = "procs"
 summary = "Process inspection"
 
+[providers.install]
+source = "github_release"
+locator = "dalance/procs"
+target_version = "0.14.11"
+destination = "~/.local/bin"
+platforms = ["linux"]
+
 [[providers]]
 id = "tokei"
 name = "tokei"
 command = "tokei"
 summary = "Codebase statistics"
+
+[providers.install]
+source = "github_release"
+locator = "XAMPPRocky/tokei"
+target_version = "14.0.0"
+destination = "~/.local/bin"
+platforms = ["linux"]
