@@ -247,6 +247,7 @@ version = "0.1.0"
 dependencies = [
  "arsenallspice",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 

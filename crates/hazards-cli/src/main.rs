@@ -3,7 +3,8 @@ use std::{error::Error, path::PathBuf, process::ExitCode};
 use arsenallspice::Registry;
 use clap::{Args, Parser, Subcommand};
 use hazards_core::{
-    CheckStatus, Doctor, HazardsPaths, HostKind, Persistence, ResolvedProfile, Role,
+    CheckStatus, Doctor, HazardsPaths, HostKind, Persistence, ProvisionItem, ProvisionPlanner,
+    ProvisionStatus, ResolvedProfile, Role,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -43,6 +44,11 @@ enum Command {
     },
     /// Run read-only environment diagnostics.
     Doctor(DoctorArgs),
+    /// Inspect what provisioning would be required without changing the host.
+    Provision {
+        #[command(subcommand)]
+        command: ProvisionCommand,
+    },
     /// Inspect sandboxed Rhaisour recipes.
     Recipe {
         #[command(subcommand)]
@@ -69,6 +75,12 @@ enum ProfileCommand {
     List,
     /// Resolve a host, persistence mode, and role into one profile.
     Resolve(ProfileArgs),
+}
+
+#[derive(Debug, Subcommand)]
+enum ProvisionCommand {
+    /// Build a profile-aware, read-only installation plan.
+    Plan(ProfileArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -137,6 +149,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
         Command::Arsenal { command } => run_arsenal(command),
         Command::Profile { command } => run_profile(command),
         Command::Doctor(args) => run_doctor(args),
+        Command::Provision { command } => run_provision(command),
         Command::Recipe { command } => run_recipe(command),
     }
 }
@@ -219,6 +232,89 @@ fn run_doctor(args: DoctorArgs) -> Result<ExitCode, Box<dyn Error>> {
         Ok(ExitCode::FAILURE)
     } else {
         Ok(ExitCode::SUCCESS)
+    }
+}
+
+fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> {
+    match command {
+        ProvisionCommand::Plan(args) => {
+            let registry = Registry::embedded()?;
+            let profile = resolve_profile(&args);
+            let plan = ProvisionPlanner::new(&registry, &profile).plan();
+
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+            } else {
+                println!(
+                    "profile:  {} / {} / {}",
+                    profile.host, profile.persistence, profile.role
+                );
+                println!(
+                    "platform: {} / {}",
+                    plan.platform.os, plan.platform.architecture
+                );
+                println!("mode:     read-only; no changes will be made");
+                for item in &plan.items {
+                    print_provision_item(item);
+                }
+            }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn print_provision_item(item: &ProvisionItem) {
+    let marker = match item.status {
+        ProvisionStatus::Installed => "installed",
+        ProvisionStatus::Outdated => "outdated",
+        ProvisionStatus::Missing => "missing",
+        ProvisionStatus::Planned => "planned",
+        ProvisionStatus::Unsupported => "unsupported",
+    };
+
+    let observation = match item.status {
+        ProvisionStatus::Installed | ProvisionStatus::Outdated if item.path.is_some() => {
+            let command = item.resolved_command.as_deref().unwrap_or("command");
+            let version = item
+                .installed_version
+                .as_deref()
+                .map(|version| format!(" {version}"))
+                .unwrap_or_default();
+            let path = item.path.as_ref().expect("guarded path should exist");
+            format!("{command}{version} at {}", path.display())
+        }
+        _ => item.detail.clone(),
+    };
+
+    if matches!(
+        item.status,
+        ProvisionStatus::Outdated | ProvisionStatus::Missing
+    ) {
+        let install = item
+            .install
+            .as_ref()
+            .expect("actionable external item should have installation intent");
+        println!(
+            "[{marker:<11}] {:<12} {}; target {} via {} {} -> {}",
+            item.id,
+            observation,
+            install.target_version,
+            install.source,
+            install.locator,
+            install.destination
+        );
+    } else if item.status == ProvisionStatus::Unsupported {
+        let platforms = item
+            .install
+            .as_ref()
+            .map(|install| install.platforms.join(", "))
+            .unwrap_or_else(|| "none".to_owned());
+        println!(
+            "[{marker:<11}] {:<12} {}; supported platforms: {platforms}",
+            item.id, observation
+        );
+    } else {
+        println!("[{marker:<11}] {:<12} {observation}", item.id);
     }
 }
 
@@ -305,5 +401,34 @@ mod tests {
             command: Some(Command::About),
         })
         .expect("about command should run");
+    }
+
+    #[test]
+    fn parses_a_read_only_json_provision_plan() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "plan",
+            "--host",
+            "remote",
+            "--persistence",
+            "ghost",
+            "--role",
+            "research",
+            "--json",
+        ])
+        .expect("provision plan arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::Plan(args),
+        }) = cli.command
+        else {
+            panic!("expected provision plan command");
+        };
+
+        assert_eq!(args.host, HostKind::Remote);
+        assert_eq!(args.persistence, Persistence::Ghost);
+        assert_eq!(args.role, Role::Research);
+        assert!(args.json);
     }
 }

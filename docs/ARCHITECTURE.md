@@ -36,13 +36,32 @@ A concrete profile is the product of three dimensions:
 Ghost mode excludes Atuin and persistent SurrealDB storage. A future Surrelish
 adapter will use an in-memory engine for Ghost mode.
 
+## Provision planning
+
+`hazards provision plan` is the observation layer between profile composition
+and future installation. It:
+
+1. resolves pillar and provider identifiers from the selected profile;
+2. finds canonical commands or registered distribution aliases on `PATH`;
+3. invokes trusted version arguments directly, without a shell;
+4. compares loose numeric versions, including calendar versions and components
+   with leading zeroes;
+5. reports installation intent from the registry.
+
+The resulting plan is deterministic and serializable as JSON. `installed`,
+`outdated`, `missing`, `planned`, and `unsupported` are observations, not
+instructions. The plan contains an advisory target, source locator, and
+destination, but there is deliberately no executor behind it yet.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
 - Rhaisour disables dynamic `eval` and imports and enforces operation/depth
   limits.
-- Future process capabilities accept an executable plus argument vector rather
-  than shell text.
+- Environment probes accept an executable plus argument vector from the
+  validated registry rather than shell text.
+- A future installer must verify a pinned artifact digest before any archive is
+  unpacked or executable is replaced; release metadata alone is insufficient.
 - Dotfiles never contain secrets.
 - SurrealDB never becomes a credential vault.
 - Remote Zellij control remains bound to the authenticated host session.

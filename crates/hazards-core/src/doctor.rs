@@ -1,9 +1,10 @@
-use std::{env, path::PathBuf};
-
 use arsenallspice::{PillarKind, Registry};
 use serde::Serialize;
 
-use crate::ResolvedProfile;
+use crate::{
+    ResolvedProfile,
+    probe::{EnvironmentProbe, SystemProbe},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -22,14 +23,25 @@ pub struct Check {
 }
 
 /// Read-only diagnostics for a resolved profile.
-pub struct Doctor<'a> {
+pub struct Doctor<'a, P = SystemProbe> {
     registry: &'a Registry,
     profile: &'a ResolvedProfile,
+    probe: P,
 }
 
-impl<'a> Doctor<'a> {
+impl<'a> Doctor<'a, SystemProbe> {
     pub fn new(registry: &'a Registry, profile: &'a ResolvedProfile) -> Self {
-        Self { registry, profile }
+        Self::with_probe(registry, profile, SystemProbe)
+    }
+}
+
+impl<'a, P: EnvironmentProbe> Doctor<'a, P> {
+    pub fn with_probe(registry: &'a Registry, profile: &'a ResolvedProfile, probe: P) -> Self {
+        Self {
+            registry,
+            profile,
+            probe,
+        }
     }
 
     pub fn run(&self) -> Vec<Check> {
@@ -51,18 +63,15 @@ impl<'a> Doctor<'a> {
                     format!("{} is not required by this profile", pillar.name),
                 ),
                 PillarKind::External => {
-                    let command = pillar
-                        .command
-                        .as_deref()
-                        .expect("validated external pillar should declare a command");
-                    match find_command(command) {
-                        Some(path) => (
+                    let commands = pillar.command_candidates();
+                    match self.probe.locate(&commands) {
+                        Some(located) => (
                             CheckStatus::Pass,
-                            format!("{command} found at {}", path.display()),
+                            format!("{} found at {}", located.command, located.path.display()),
                         ),
                         None => (
                             CheckStatus::Missing,
-                            format!("{command} was not found on PATH"),
+                            format!("{} was not found on PATH", commands.join(" or ")),
                         ),
                     }
                 }
@@ -83,18 +92,19 @@ impl<'a> Doctor<'a> {
             if !required {
                 continue;
             }
-            let path = find_command(&provider.command);
+            let commands = provider.command_candidates();
+            let located = self.probe.locate(&commands);
             checks.push(Check {
                 id: provider.id.clone(),
-                status: if path.is_some() {
+                status: if located.is_some() {
                     CheckStatus::Pass
                 } else {
                     CheckStatus::Missing
                 },
                 required,
-                detail: path.map_or_else(
-                    || format!("{} was not found on PATH", provider.command),
-                    |path| format!("{} found at {}", provider.command, path.display()),
+                detail: located.map_or_else(
+                    || format!("{} was not found on PATH", commands.join(" or ")),
+                    |located| format!("{} found at {}", located.command, located.path.display()),
                 ),
             });
         }
@@ -103,21 +113,10 @@ impl<'a> Doctor<'a> {
     }
 }
 
-fn find_command(command: &str) -> Option<PathBuf> {
-    let candidate = PathBuf::from(command);
-    if candidate.components().count() > 1 {
-        return candidate.is_file().then_some(candidate);
-    }
-
-    env::var_os("PATH").and_then(|path| {
-        env::split_paths(&path)
-            .map(|directory| directory.join(command))
-            .find(|candidate| candidate.is_file())
-    })
-}
-
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+
     use arsenallspice::Registry;
 
     use super::*;
@@ -158,5 +157,37 @@ mod tests {
             .expect("SurrealDB check should exist");
         assert_eq!(surrealdb.status, CheckStatus::Skipped);
         assert!(surrealdb.required);
+    }
+
+    struct AliasProbe;
+
+    impl EnvironmentProbe for AliasProbe {
+        fn locate(&self, commands: &[&str]) -> Option<crate::probe::LocatedCommand> {
+            commands
+                .contains(&"fdfind")
+                .then(|| crate::probe::LocatedCommand {
+                    command: "fdfind".to_owned(),
+                    path: PathBuf::from("/usr/bin/fdfind"),
+                })
+        }
+
+        fn version(&self, _executable: &Path, _args: &[String]) -> Result<String, String> {
+            unreachable!("doctor does not probe versions")
+        }
+    }
+
+    #[test]
+    fn doctor_accepts_a_distribution_command_alias() {
+        let registry = Registry::embedded().expect("registry should load");
+        let profile =
+            ResolvedProfile::new(HostKind::Desktop, Persistence::Local, Role::Development);
+        let checks = Doctor::with_probe(&registry, &profile, AliasProbe).run();
+        let fd = checks
+            .iter()
+            .find(|check| check.id == "fd")
+            .expect("fd check should exist");
+
+        assert_eq!(fd.status, CheckStatus::Pass);
+        assert!(fd.detail.contains("/usr/bin/fdfind"));
     }
 }
