@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 const EMBEDDED_REGISTRY: &str = include_str!("../../../ingredients/arsenallspice/pillars.toml");
+const EMBEDDED_ACQUISITIONS: &str =
+    include_str!("../../../ingredients/arsenallspice/acquisitions.toml");
 
 /// A parsed HAZARDS pillar and provider registry.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -77,12 +79,84 @@ pub struct InstallSpec {
 #[serde(rename_all = "snake_case")]
 pub enum InstallSource {
     GithubRelease,
+    CargoRegistry,
 }
 
 impl fmt::Display for InstallSource {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::GithubRelease => formatter.write_str("GitHub release"),
+            Self::CargoRegistry => formatter.write_str("crates.io source"),
+        }
+    }
+}
+
+/// Integrity-pinned acquisition records for supported targets.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct AcquisitionLock {
+    pub schema_version: u8,
+    pub observed_at: String,
+    #[serde(default)]
+    pub artifacts: Vec<LockedArtifact>,
+}
+
+/// Exact bytes that a future acquisition executor may retrieve and verify.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct LockedArtifact {
+    pub tool_id: String,
+    pub version: String,
+    pub os: String,
+    pub architecture: String,
+    pub method: AcquisitionMethod,
+    pub format: ArtifactFormat,
+    pub name: String,
+    pub size: u64,
+    pub sha256: String,
+    pub url: String,
+    pub evidence: DigestEvidence,
+}
+
+/// How the pinned bytes are distributed upstream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AcquisitionMethod {
+    GithubRelease,
+    CargoRegistry,
+}
+
+/// Container format of the pinned artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactFormat {
+    Binary,
+    TarGz,
+    TarXz,
+    Zip,
+    Crate,
+}
+
+/// Upstream metadata from which the pinned SHA-256 value was recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DigestEvidence {
+    GithubAssetDigest,
+    CratesIoChecksum,
+}
+
+impl fmt::Display for AcquisitionMethod {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GithubRelease => formatter.write_str("GitHub release"),
+            Self::CargoRegistry => formatter.write_str("crates.io source"),
+        }
+    }
+}
+
+impl fmt::Display for DigestEvidence {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GithubAssetDigest => formatter.write_str("GitHub asset digest"),
+            Self::CratesIoChecksum => formatter.write_str("crates.io checksum"),
         }
     }
 }
@@ -105,6 +179,34 @@ pub enum RegistryError {
     MissingInstallSpec(String),
     #[error("external tool {id} has invalid installation intent: {reason}")]
     InvalidInstallSpec { id: String, reason: String },
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AcquisitionError {
+    #[error("could not parse the acquisition lock: {0}")]
+    Parse(String),
+    #[error("unsupported acquisition lock schema version {0}")]
+    UnsupportedSchema(u8),
+    #[error("acquisition record references tool without external install intent: {0}")]
+    UnknownTool(String),
+    #[error(
+        "acquisition version {actual} for {id} does not match registry target version {expected}"
+    )]
+    VersionMismatch {
+        id: String,
+        expected: String,
+        actual: String,
+    },
+    #[error("duplicate acquisition target for {id}: {os}/{architecture}")]
+    DuplicateTarget {
+        id: String,
+        os: String,
+        architecture: String,
+    },
+    #[error("invalid acquisition record for {id}: {reason}")]
+    InvalidArtifact { id: String, reason: String },
+    #[error("external tool has no acquisition record: {0}")]
+    MissingCoverage(String),
 }
 
 impl Registry {
@@ -172,6 +274,113 @@ impl Registry {
 
         Ok(())
     }
+
+    /// Find the install intent for an external pillar or provider.
+    pub fn install_spec(&self, id: &str) -> Option<&InstallSpec> {
+        self.pillars
+            .iter()
+            .find(|pillar| pillar.id == id)
+            .and_then(|pillar| pillar.install.as_ref())
+            .or_else(|| {
+                self.providers
+                    .iter()
+                    .find(|provider| provider.id == id)
+                    .and_then(|provider| provider.install.as_ref())
+            })
+    }
+}
+
+impl AcquisitionLock {
+    /// Load and validate the acquisition records shipped with HAZARDS.
+    pub fn embedded(registry: &Registry) -> Result<Self, AcquisitionError> {
+        Self::parse(EMBEDDED_ACQUISITIONS, registry)
+    }
+
+    /// Parse acquisition records and cross-check them against registry intent.
+    pub fn parse(source: &str, registry: &Registry) -> Result<Self, AcquisitionError> {
+        let lock: Self =
+            toml::from_str(source).map_err(|error| AcquisitionError::Parse(error.to_string()))?;
+        lock.validate(registry)?;
+        Ok(lock)
+    }
+
+    pub fn validate(&self, registry: &Registry) -> Result<(), AcquisitionError> {
+        if self.schema_version != 1 {
+            return Err(AcquisitionError::UnsupportedSchema(self.schema_version));
+        }
+        if self.observed_at.trim().is_empty() {
+            return Err(AcquisitionError::InvalidArtifact {
+                id: "lock".to_owned(),
+                reason: "observation date is empty".to_owned(),
+            });
+        }
+
+        let mut targets = HashSet::new();
+        let mut covered = HashSet::new();
+        for artifact in &self.artifacts {
+            let install = registry
+                .install_spec(&artifact.tool_id)
+                .ok_or_else(|| AcquisitionError::UnknownTool(artifact.tool_id.clone()))?;
+            if artifact.version != install.target_version {
+                return Err(AcquisitionError::VersionMismatch {
+                    id: artifact.tool_id.clone(),
+                    expected: install.target_version.clone(),
+                    actual: artifact.version.clone(),
+                });
+            }
+            if !targets.insert((
+                artifact.tool_id.as_str(),
+                artifact.os.as_str(),
+                artifact.architecture.as_str(),
+            )) {
+                return Err(AcquisitionError::DuplicateTarget {
+                    id: artifact.tool_id.clone(),
+                    os: artifact.os.clone(),
+                    architecture: artifact.architecture.clone(),
+                });
+            }
+            validate_artifact(artifact, install)?;
+            covered.insert(artifact.tool_id.as_str());
+        }
+
+        for pillar in external_pillar_ids(registry) {
+            if !covered.contains(pillar) {
+                return Err(AcquisitionError::MissingCoverage(pillar.to_owned()));
+            }
+        }
+        for provider in &registry.providers {
+            if !covered.contains(provider.id.as_str()) {
+                return Err(AcquisitionError::MissingCoverage(provider.id.clone()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Select an exact architecture record, falling back to an architecture-neutral source.
+    pub fn select(
+        &self,
+        tool_id: &str,
+        version: &str,
+        os: &str,
+        architecture: &str,
+    ) -> Option<&LockedArtifact> {
+        self.artifacts
+            .iter()
+            .find(|artifact| {
+                artifact.tool_id == tool_id
+                    && artifact.version == version
+                    && artifact.os == os
+                    && artifact.architecture == architecture
+            })
+            .or_else(|| {
+                self.artifacts.iter().find(|artifact| {
+                    artifact.tool_id == tool_id
+                        && artifact.version == version
+                        && artifact.os == os
+                        && artifact.architecture == "*"
+                })
+            })
+    }
 }
 
 impl Pillar {
@@ -216,6 +425,79 @@ fn validate_install_spec(id: &str, install: &InstallSpec) -> Result<(), Registry
     if install.platforms.is_empty() {
         return Err(invalid("supported platform list is empty"));
     }
+    Ok(())
+}
+
+fn external_pillar_ids(registry: &Registry) -> impl Iterator<Item = &str> {
+    registry
+        .pillars
+        .iter()
+        .filter(|pillar| pillar.kind == PillarKind::External)
+        .map(|pillar| pillar.id.as_str())
+}
+
+fn validate_artifact(
+    artifact: &LockedArtifact,
+    install: &InstallSpec,
+) -> Result<(), AcquisitionError> {
+    let invalid = |reason: &str| AcquisitionError::InvalidArtifact {
+        id: artifact.tool_id.clone(),
+        reason: reason.to_owned(),
+    };
+
+    if artifact.name.trim().is_empty() {
+        return Err(invalid("asset name is empty"));
+    }
+    if artifact.size == 0 {
+        return Err(invalid("asset size is zero"));
+    }
+    if artifact.architecture.trim().is_empty() {
+        return Err(invalid("architecture is empty"));
+    }
+    if !install.platforms.contains(&artifact.os) {
+        return Err(invalid(
+            "operating system is not declared by install intent",
+        ));
+    }
+    if artifact.sha256.len() != 64
+        || !artifact
+            .sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(invalid(
+            "SHA-256 digest must be 64 lowercase hex characters",
+        ));
+    }
+    if !artifact.url.starts_with("https://") {
+        return Err(invalid("source URL must use HTTPS"));
+    }
+
+    match (artifact.method, artifact.format, artifact.evidence) {
+        (
+            AcquisitionMethod::GithubRelease,
+            ArtifactFormat::Crate,
+            DigestEvidence::GithubAssetDigest,
+        ) => return Err(invalid("GitHub release artifact cannot use crate format")),
+        (AcquisitionMethod::GithubRelease, _, DigestEvidence::GithubAssetDigest)
+            if install.source == InstallSource::GithubRelease
+                && artifact.url.starts_with(&format!(
+                    "https://github.com/{}/releases/download/",
+                    install.locator
+                )) => {}
+        (
+            AcquisitionMethod::CargoRegistry,
+            ArtifactFormat::Crate,
+            DigestEvidence::CratesIoChecksum,
+        ) if install.source == InstallSource::CargoRegistry
+            && artifact.url
+                == format!(
+                    "https://crates.io/api/v1/crates/{}/{}/download",
+                    install.locator, install.target_version
+                ) => {}
+        _ => return Err(invalid("method, format, evidence, and URL do not agree")),
+    }
+
     Ok(())
 }
 
@@ -295,6 +577,69 @@ mod tests {
                 .providers
                 .iter()
                 .all(|provider| provider.install.is_some())
+        );
+    }
+
+    #[test]
+    fn embedded_acquisition_lock_covers_every_external_tool() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+        let lock =
+            AcquisitionLock::embedded(&registry).expect("embedded acquisition lock should parse");
+
+        assert_eq!(lock.schema_version, 1);
+        assert_eq!(lock.artifacts.len(), 24);
+        assert_eq!(
+            lock.select("zellij", "0.44.3", "linux", "x86_64")
+                .expect("Zellij x86_64 artifact should exist")
+                .format,
+            ArtifactFormat::TarGz
+        );
+        assert_eq!(
+            lock.select("alacritty", "0.17.0", "linux", "aarch64")
+                .expect("architecture-neutral Alacritty source should exist")
+                .method,
+            AcquisitionMethod::CargoRegistry
+        );
+    }
+
+    #[test]
+    fn acquisition_lock_rejects_target_version_drift() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+        let source = EMBEDDED_ACQUISITIONS.replacen(
+            "tool_id = \"helix\"\nversion = \"25.07.1\"",
+            "tool_id = \"helix\"\nversion = \"99.0.0\"",
+            1,
+        );
+
+        let error =
+            AcquisitionLock::parse(&source, &registry).expect_err("version drift should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::VersionMismatch {
+                id: "helix".to_owned(),
+                expected: "25.07.1".to_owned(),
+                actual: "99.0.0".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn acquisition_lock_rejects_malformed_digests() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+        let source = EMBEDDED_ACQUISITIONS.replacen(
+            "sha256 = \"3f08e63ecd388fff657ad39722f88bb03dcf326f1f2da2700d99e1dc40ab2e8b\"",
+            "sha256 = \"trust-me-bro\"",
+            1,
+        );
+
+        let error =
+            AcquisitionLock::parse(&source, &registry).expect_err("invalid digest should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::InvalidArtifact {
+                id: "helix".to_owned(),
+                reason: "SHA-256 digest must be 64 lowercase hex characters".to_owned(),
+            }
         );
     }
 }

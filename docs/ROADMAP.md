@@ -19,7 +19,8 @@
 - [ ] Zellij create/attach/resurrect commands
 - [ ] Dotter profile generation and dry-run deployment
 - [x] Profile-aware read-only provision planning
-- [ ] Tool manifest with pinned release checksums
+- [x] Linux x86_64/aarch64 acquisition lock with pinned SHA-256 evidence
+- [ ] Signed provenance and transitive source-build locks
 - [ ] Binary release bootstrap and rollback
 
 ## Phase 3 — State and recipes

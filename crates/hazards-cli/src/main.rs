@@ -1,10 +1,10 @@
 use std::{error::Error, path::PathBuf, process::ExitCode};
 
-use arsenallspice::Registry;
+use arsenallspice::{AcquisitionLock, Registry};
 use clap::{Args, Parser, Subcommand};
 use hazards_core::{
-    CheckStatus, Doctor, HazardsPaths, HostKind, Persistence, ProvisionItem, ProvisionPlanner,
-    ProvisionStatus, ResolvedProfile, Role,
+    AcquisitionItem, AcquisitionPlanner, AcquisitionStatus, CheckStatus, Doctor, HazardsPaths,
+    HostKind, Persistence, ProvisionItem, ProvisionPlanner, ProvisionStatus, ResolvedProfile, Role,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -81,6 +81,8 @@ enum ProfileCommand {
 enum ProvisionCommand {
     /// Build a profile-aware, read-only installation plan.
     Plan(ProfileArgs),
+    /// Resolve exact integrity-pinned artifacts without retrieving them.
+    AcquirePlan(ProfileArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -259,6 +261,31 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 }
             }
         }
+        ProvisionCommand::AcquirePlan(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let plan = AcquisitionPlanner::new(&lock, &provision).plan();
+
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+            } else {
+                println!(
+                    "profile:  {} / {} / {}",
+                    profile.host, profile.persistence, profile.role
+                );
+                println!(
+                    "platform: {} / {}",
+                    plan.platform.os, plan.platform.architecture
+                );
+                println!("lock:     observed {}", plan.lock_observed_at);
+                println!("mode:     read-only; no bytes will be retrieved");
+                for item in &plan.items {
+                    print_acquisition_item(item);
+                }
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -315,6 +342,50 @@ fn print_provision_item(item: &ProvisionItem) {
         );
     } else {
         println!("[{marker:<11}] {:<12} {observation}", item.id);
+    }
+}
+
+fn print_acquisition_item(item: &AcquisitionItem) {
+    let marker = match item.status {
+        AcquisitionStatus::LockedBinary => "binary",
+        AcquisitionStatus::LockedSource => "source",
+        AcquisitionStatus::Unavailable => "unavailable",
+    };
+    let action = match item.provision_status {
+        ProvisionStatus::Outdated => "upgrade",
+        ProvisionStatus::Missing => "install",
+        ProvisionStatus::Unsupported => "resolve",
+        ProvisionStatus::Installed | ProvisionStatus::Planned => "inspect",
+    };
+
+    println!(
+        "[{marker:<11}] {:<12} {action} {} -> {}",
+        item.id, item.target_version, item.destination
+    );
+    if let Some(artifact) = &item.artifact {
+        println!(
+            "              asset    {} ({})",
+            artifact.name,
+            format_size(artifact.size)
+        );
+        println!("              sha256   {}", artifact.sha256);
+        println!("              evidence {}", artifact.evidence);
+        println!("              source   {}", artifact.url);
+    } else {
+        println!("              {}", item.detail);
+    }
+}
+
+fn format_size(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    let bytes = bytes as f64;
+    if bytes >= MIB {
+        format!("{:.1} MiB", bytes / MIB)
+    } else if bytes >= KIB {
+        format!("{:.1} KiB", bytes / KIB)
+    } else {
+        format!("{bytes:.0} B")
     }
 }
 
@@ -430,5 +501,41 @@ mod tests {
         assert_eq!(args.persistence, Persistence::Ghost);
         assert_eq!(args.role, Role::Research);
         assert!(args.json);
+    }
+
+    #[test]
+    fn parses_a_read_only_acquisition_plan() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "acquire-plan",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("acquisition plan arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::AcquirePlan(args),
+        }) = cli.command
+        else {
+            panic!("expected acquisition plan command");
+        };
+
+        assert_eq!(args.host, HostKind::Desktop);
+        assert_eq!(args.persistence, Persistence::Local);
+        assert_eq!(args.role, Role::Development);
+        assert!(args.json);
+    }
+
+    #[test]
+    fn byte_sizes_are_human_readable() {
+        assert_eq!(format_size(512), "512 B");
+        assert_eq!(format_size(1536), "1.5 KiB");
+        assert_eq!(format_size(3 * 1024 * 1024), "3.0 MiB");
     }
 }
