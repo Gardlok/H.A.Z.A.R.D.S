@@ -59,6 +59,11 @@ $ cargo run -p hazards-cli -- provision acquire-plan \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- provision acquire \
+    --tool zellij \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -87,6 +92,20 @@ a Linux binary—currently Alacritty and Tokei—the lock records the checksumme
 crates.io source archive and reports `locked_source` rather than inventing a
 binary. `hazards provision acquire-plan` performs no network or filesystem I/O.
 
+`hazards provision acquire` is the deliberately mutating boundary. It requires
+one or more explicit `--tool ID` selections or `--all`, retrieves only the URL
+embedded in the validated acquisition lock, and accepts bytes only when their
+exact size and SHA-256 digest match. Verified objects are stored by digest
+under `~/.cache/hazards/objects/sha256`; append-only acquisition receipts live
+under `~/.local/state/hazards/receipts/acquisitions`. Existing cache objects are
+rehashed before use. Corrupt objects fail closed instead of being silently
+replaced.
+
+Acquisition is not installation. The command does not unpack an archive, build
+a crate, set an executable bit, run a subprocess, modify `PATH`, or write into
+`~/.local/bin`. It has merely admitted some bytes into quarantine after checking
+their paperwork.
+
 ## Build and validate
 
 HAZARDS uses Rust 2024 and supports Rust 1.85 or newer.
@@ -108,10 +127,10 @@ For a source checkout, the bootstrap helper installs the `hazards` binary into
     --role development
 ```
 
-It intentionally refuses to download and execute a release. The acquisition
-lock now supplies reviewable digests, but retrieval, verification, extraction,
-replacement, and rollback still require an explicit executor rather than a
-bootstrap script wearing a fake moustache.
+The bootstrap helper intentionally refuses to download or execute a release.
+Verified retrieval is available only through the explicit acquisition command;
+extraction, replacement, and rollback remain separate phases rather than
+features smuggled into a bootstrap script wearing a fake moustache.
 
 ## Design documentation
 
@@ -122,11 +141,13 @@ bootstrap script wearing a fake moustache.
 - [State ownership decision](docs/adr/0002-state-ownership.md)
 - [Planning before mutation decision](docs/adr/0003-planning-before-mutation.md)
 - [Acquisition evidence decision](docs/adr/0004-lock-acquisition-evidence.md)
+- [Verified acquisition cache decision](docs/adr/0005-verified-acquisition-cache.md)
 
 ## Status
 
 The CLI, registry, profile resolver, diagnostic model, read-only provision and
-acquisition planners, Rhai recipe compiler, starter pillar configurations, and
-state schema are functional. Verified retrieval and installation of external
-applications, Dotter-driven deployment, SurrealDB runtime wiring, Zellij
-automation, and the Ratatui Arsenal interface follow in later phases.
+acquisition planners, verified acquisition cache, Rhai recipe compiler, starter
+pillar configurations, and state schema are functional. Safe materialization
+and installation of external applications, Dotter-driven deployment, SurrealDB
+runtime wiring, Zellij automation, and the Ratatui Arsenal interface follow in
+later phases.

@@ -71,6 +71,37 @@ services nor retrieves the URL it reports. `locked_source` means only that the
 top-level crate bytes are pinned; it does not claim that build dependencies,
 native libraries, or compiler inputs have been resolved.
 
+## Verified acquisition cache
+
+`hazards provision acquire` is the first mutating provision operation. Its
+authority stops at two HAZARDS-owned XDG locations:
+
+- content-addressed objects under
+  `$XDG_CACHE_HOME/hazards/objects/sha256/<prefix>/<digest>`;
+- append-only JSON receipts under
+  `$XDG_STATE_HOME/hazards/receipts/acquisitions/<tool>/<version>`.
+
+The command requires explicit tool selection or `--all`. Before any request,
+the complete selection is checked against the acquisition plan. The HTTP client
+uses normal certificate validation, accepts only HTTPS URLs and HTTPS
+redirects, limits redirect depth, and applies connection and transfer
+timeouts. Response decompression is disabled so the hashed bytes are the bytes
+named by the lock.
+
+Bytes stream into a private temporary file while HAZARDS enforces the locked
+size and computes SHA-256. Only an exact match is synchronized and atomically
+persisted. Interrupted, truncated, oversized, and digest-mismatched transfers
+leave no final object. A cache hit is not trusted by name: its type, size, and
+digest are checked again without opening the network source. A corrupt cached
+object is preserved as evidence and rejected; this phase does not invent an
+implicit repair policy.
+
+Acquisition receipts describe verification events. They are not installation
+receipts and do not claim that an archive is safe to extract or that a payload
+can execute on the host. Multi-tool acquisition is not transactional: each
+successfully verified content-addressed object remains useful if a later
+network request fails.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
@@ -78,8 +109,10 @@ native libraries, or compiler inputs have been resolved.
   limits.
 - Environment probes accept an executable plus argument vector from the
   validated registry rather than shell text.
-- A future retriever must hash downloaded bytes and compare them to the lock
-  before any archive is unpacked or executable is replaced.
+- The acquisition retriever hashes downloaded bytes and compares them to the
+  lock before admitting them to the private cache.
+- Cached artifacts remain untrusted input to the future materializer. Archive
+  paths, links, payload layout, and executable identity have not been approved.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
 - Source-archive checksums do not lock a transitive Cargo dependency graph.
