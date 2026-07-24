@@ -51,7 +51,8 @@ and future installation. It:
 The resulting plan is deterministic and serializable as JSON. `installed`,
 `outdated`, `missing`, `planned`, and `unsupported` are observations, not
 instructions. The plan contains an advisory target, source locator, and
-destination, but there is deliberately no executor behind it yet.
+destination. Later commands cross separate, explicit mutation boundaries for
+acquisition, materialization, and installation.
 
 ## Acquisition evidence
 
@@ -140,6 +141,51 @@ produce append-only materialization receipts.
 This phase does not execute a payload, set executable permissions, install or
 replace a command, modify `PATH`, or write to `~/.local/bin`.
 
+## Transactional user-local installation
+
+`hazards provision install` activates one or more explicitly selected locked
+binary artifacts. It requires an existing verified materialization and performs
+no network access or implicit extraction. Before installation, the materializer
+freshly reproduces the locked cache object and requires the staged tree and
+manifest to match it.
+
+The installer copies the complete verified tree into:
+
+`$XDG_DATA_HOME/hazards/apps/<tool>/<version>/<artifact-digest>`.
+
+Directories are `0700`, support files are `0600`, and only the exact
+lock-identified payload is `0700`. A private installation manifest binds the
+tool, canonical command, target version, artifact identity, payload identity,
+architecture, and complete tree. Existing stores are fully revalidated and
+corruption fails closed.
+
+Activation is a managed symlink at `~/.local/bin/<canonical-command>`. The
+canonical command is registry-validated as a single safe filename. The
+installer refuses non-symlinks, symlinks outside the HAZARDS application store,
+and managed-looking symlinks whose manifest, tree, payload, tool, or command do
+not validate. It also refuses a group- or world-writable user bin directory.
+
+Before replacing an activation, HAZARDS runs the registered version probe
+against the exact stored payload. After replacement, it probes through the
+activation, requires the expected version, and requires command lookup on the
+current `PATH` to resolve to that activation. Failure restores the preceding
+activation. A receipt-write failure is likewise an activation failure and
+triggers recovery.
+
+Per-tool advisory locks serialize HAZARDS installers. Receipts are append-only
+under
+`$XDG_STATE_HOME/hazards/receipts/installations/<tool>/<version>`. They record
+the previous and resulting targets, the path that resolved before activation,
+store and payload identities, checks, outcome, failures, and relationships
+between install and recovery events.
+
+Explicit rollback finds the newest applicable successful install or upgrade
+whose resulting target is still active. It restores the recorded previous
+managed target or removes the activation for an initial install, then reruns
+version and `PATH` checks. A failed rollback check restores the newer target.
+Installation is transactional per tool, not across a multi-tool `--all`
+operation.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
@@ -152,9 +198,13 @@ replace a command, modify `PATH`, or write to `~/.local/bin`.
 - Cached artifacts remain untrusted input. The materializer enforces archive
   path and type rules, expansion bounds, exact payload identity, and ELF
   architecture before admitting an inert private staging tree.
-- Staged artifacts remain untrusted for execution. Runtime dependency checks,
-  transactional replacement, PATH validation, health checks, and rollback
-  belong to the future installer.
+- Staged artifacts remain untrusted for execution. The installer reproduces
+  them from locked cache bytes, copies them to a private immutable-by-policy
+  application store, runs exact version probes, validates activation and
+  `PATH`, and automatically restores the prior activation on failure.
+- HAZARDS trusts the invoking user and the user's private XDG roots. It does
+  not claim to defend against another process running concurrently as that same
+  user and deliberately rewriting those roots outside HAZARDS.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
 - Source-archive checksums do not lock a transitive Cargo dependency graph.

@@ -179,10 +179,14 @@ pub enum RegistryError {
     DuplicateId(String),
     #[error("duplicate ingredient directory: {0}")]
     DuplicateIngredient(String),
+    #[error("duplicate canonical command: {0}")]
+    DuplicateCommand(String),
     #[error("external pillar {0} does not declare a command")]
     MissingCommand(String),
     #[error("external tool {0} does not declare installation intent")]
     MissingInstallSpec(String),
+    #[error("external tool {id} has unsafe command name: {command}")]
+    InvalidCommand { id: String, command: String },
     #[error("external tool {id} has invalid installation intent: {reason}")]
     InvalidInstallSpec { id: String, reason: String },
 }
@@ -242,6 +246,7 @@ impl Registry {
 
         let mut ids = HashSet::new();
         let mut ingredients = HashSet::new();
+        let mut commands = HashSet::new();
         for pillar in &self.pillars {
             if !ids.insert(pillar.id.as_str()) {
                 return Err(RegistryError::DuplicateId(pillar.id.clone()));
@@ -255,6 +260,16 @@ impl Registry {
                 return Err(RegistryError::MissingCommand(pillar.id.clone()));
             }
             if pillar.kind == PillarKind::External {
+                let command = pillar
+                    .command
+                    .as_deref()
+                    .expect("external command presence was checked");
+                if !commands.insert(command) {
+                    return Err(RegistryError::DuplicateCommand(command.to_owned()));
+                }
+                for command in pillar.command_candidates() {
+                    validate_command(&pillar.id, command)?;
+                }
                 validate_install_spec(
                     &pillar.id,
                     pillar
@@ -268,6 +283,12 @@ impl Registry {
         for provider in &self.providers {
             if !ids.insert(provider.id.as_str()) {
                 return Err(RegistryError::DuplicateId(provider.id.clone()));
+            }
+            for command in provider.command_candidates() {
+                validate_command(&provider.id, command)?;
+            }
+            if !commands.insert(&provider.command) {
+                return Err(RegistryError::DuplicateCommand(provider.command.clone()));
             }
             validate_install_spec(
                 &provider.id,
@@ -292,6 +313,25 @@ impl Registry {
                     .iter()
                     .find(|provider| provider.id == id)
                     .and_then(|provider| provider.install.as_ref())
+            })
+    }
+
+    /// Return the canonical executable and its trusted version arguments.
+    pub fn command_spec(&self, id: &str) -> Option<(&str, &[String])> {
+        self.pillars
+            .iter()
+            .find(|pillar| pillar.id == id && pillar.kind == PillarKind::External)
+            .and_then(|pillar| {
+                pillar
+                    .command
+                    .as_deref()
+                    .map(|command| (command, pillar.version_args.as_slice()))
+            })
+            .or_else(|| {
+                self.providers
+                    .iter()
+                    .find(|provider| provider.id == id)
+                    .map(|provider| (provider.command.as_str(), provider.version_args.as_slice()))
             })
     }
 }
@@ -411,6 +451,23 @@ impl Provider {
 
 fn default_version_args() -> Vec<String> {
     vec!["--version".to_owned()]
+}
+
+fn validate_command(id: &str, command: &str) -> Result<(), RegistryError> {
+    let safe = !command.is_empty()
+        && command != "."
+        && command != ".."
+        && command
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    if safe {
+        Ok(())
+    } else {
+        Err(RegistryError::InvalidCommand {
+            id: id.to_owned(),
+            command: command.to_owned(),
+        })
+    }
 }
 
 fn validate_install_spec(id: &str, install: &InstallSpec) -> Result<(), RegistryError> {
@@ -609,6 +666,40 @@ mod tests {
 
         let error = Registry::parse(&source).expect_err("duplicate id should fail");
         assert_eq!(error, RegistryError::DuplicateId("helix".to_owned()));
+    }
+
+    #[test]
+    fn rejects_unsafe_external_command_names() {
+        let source = EMBEDDED_REGISTRY.replacen("command = \"hx\"", "command = \"../hx\"", 1);
+
+        let error = Registry::parse(&source).expect_err("unsafe command should fail");
+        assert_eq!(
+            error,
+            RegistryError::InvalidCommand {
+                id: "helix".to_owned(),
+                command: "../hx".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_canonical_commands() {
+        let source = EMBEDDED_REGISTRY.replacen("command = \"atuin\"", "command = \"hx\"", 1);
+
+        let error = Registry::parse(&source).expect_err("duplicate command should fail");
+        assert_eq!(error, RegistryError::DuplicateCommand("hx".to_owned()));
+    }
+
+    #[test]
+    fn command_specs_use_the_canonical_command_and_version_arguments() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+
+        let (command, version_args) = registry
+            .command_spec("fd")
+            .expect("fd command specification should exist");
+        assert_eq!(command, "fd");
+        assert_eq!(version_args, ["--version"]);
+        assert!(registry.command_spec("arsenal").is_none());
     }
 
     #[test]

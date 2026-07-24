@@ -19,6 +19,7 @@ repository = "https://github.com/Gardlok/H.A.Z.A.R.D.S"
 arsenallspice = { path = "crates/arsenallspice" }
 clap = { version = "4.5.41", features = ["derive"] }
 flate2 = "1.1.9"
+fs2 = "0.4.3"
 hazards-core = { path = "crates/hazards-core" }
 lzma-rust2 = { version = "0.17.0", default-features = false, features = ["std", "xz"] }
 rhai = { version = "1.22.2", features = ["sync"] }

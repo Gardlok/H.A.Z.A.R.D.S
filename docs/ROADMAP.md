@@ -22,7 +22,7 @@
 - [x] Linux x86_64/aarch64 acquisition lock with pinned SHA-256 evidence
 - [x] Verified content-addressed acquisition cache and receipts
 - [x] Safe archive materialization and payload identity checks
-- [ ] Transactional user-local installation, PATH verification, and rollback
+- [x] Transactional user-local installation, PATH verification, and rollback
 - [ ] Signed provenance and transitive source-build locks
 - [ ] Binary release bootstrap and rollback
 
