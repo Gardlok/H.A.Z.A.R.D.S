@@ -1,0 +1,115 @@
+schema_version = 1
+
+[[pillars]]
+letter = "H"
+id = "helix"
+name = "Helix"
+ingredient = "helixer"
+kind = "external"
+command = "hx"
+summary = "Editing and language tooling"
+
+[[pillars]]
+letter = "A"
+id = "alacritty"
+name = "Alacritty"
+ingredient = "alacarte"
+kind = "external"
+command = "alacritty"
+summary = "Local terminal presentation"
+
+[[pillars]]
+letter = "Z"
+id = "zellij"
+name = "Zellij"
+ingredient = "zellijuice"
+kind = "external"
+command = "zellij"
+summary = "Sessions, panes, layouts, and remote continuity"
+
+[[pillars]]
+letter = "A"
+id = "arsenal"
+name = "Arsenal"
+ingredient = "arsenallspice"
+kind = "internal"
+summary = "HAZARDS control plane and tool registry"
+
+[[pillars]]
+letter = "R"
+id = "rhai"
+name = "Rhai"
+ingredient = "rhaisour"
+kind = "embedded"
+summary = "Sandboxed recipes and automation"
+
+[[pillars]]
+letter = "D"
+id = "dotter"
+name = "Dotter"
+ingredient = "dotterbatter"
+kind = "external"
+command = "dotter"
+summary = "Profile-aware configuration deployment"
+
+[[pillars]]
+letter = "S"
+id = "surrealdb"
+name = "SurrealDB"
+ingredient = "surrelish"
+kind = "planned"
+summary = "Planned project, host, workspace, and run metadata"
+
+[[providers]]
+id = "atuin"
+name = "Atuin"
+command = "atuin"
+summary = "Contextual shell history and optional encrypted synchronization"
+
+[[providers]]
+id = "ripgrep"
+name = "ripgrep"
+command = "rg"
+summary = "Fast recursive text search"
+
+[[providers]]
+id = "fd"
+name = "fd"
+command = "fd"
+summary = "Fast filesystem search"
+
+[[providers]]
+id = "bat"
+name = "bat"
+command = "bat"
+summary = "Syntax-aware file viewing"
+
+[[providers]]
+id = "delta"
+name = "Delta"
+command = "delta"
+summary = "Syntax-aware Git and diff paging"
+
+[[providers]]
+id = "mise"
+name = "mise"
+command = "mise"
+summary = "Project toolchain, environment, and task management"
+
+[[providers]]
+id = "bottom"
+name = "bottom"
+command = "btm"
+summary = "Interactive system monitoring"
+
+[[providers]]
+id = "procs"
+name = "procs"
+command = "procs"
+summary = "Process inspection"
+
+[[providers]]
+id = "tokei"
+name = "tokei"
+command = "tokei"
+summary = "Codebase statistics"

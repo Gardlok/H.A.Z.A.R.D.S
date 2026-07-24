@@ -1,0 +1,20 @@
+[package]
+name = "hazards-cli"
+description = "Command-line control plane for the HAZARDS terminal workspace"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "hazards"
+path = "src/main.rs"
+
+[dependencies]
+arsenallspice.workspace = true
+clap.workspace = true
+hazards-core.workspace = true
+rhaisour.workspace = true
+serde_json.workspace = true
