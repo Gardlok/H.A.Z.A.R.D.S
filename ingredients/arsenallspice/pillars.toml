@@ -26,8 +26,8 @@ command = "alacritty"
 summary = "Local terminal presentation"
 
 [pillars.install]
-source = "github_release"
-locator = "alacritty/alacritty"
+source = "cargo_registry"
+locator = "alacritty"
 target_version = "0.17.0"
 destination = "~/.local/bin"
 platforms = ["linux"]
@@ -201,8 +201,8 @@ command = "tokei"
 summary = "Codebase statistics"
 
 [providers.install]
-source = "github_release"
-locator = "XAMPPRocky/tokei"
+source = "cargo_registry"
+locator = "tokei"
 target_version = "14.0.0"
 destination = "~/.local/bin"
 platforms = ["linux"]

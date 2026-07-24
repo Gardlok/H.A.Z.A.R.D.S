@@ -55,6 +55,10 @@ $ cargo run -p hazards-cli -- provision plan \
     --persistence ghost \
     --role operations \
     --json
+$ cargo run -p hazards-cli -- provision acquire-plan \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -75,6 +79,13 @@ validated Arsenal registry—never through a shell—and recognizes Debian's
 `fdfind` and `batcat` command names. Release versions in the registry are
 advisory planning targets. No archive is downloaded and no command, dotfile, or
 database is modified.
+
+The acquisition planner narrows missing and outdated tools to exact locked
+bytes for the current operating system and architecture. Linux x86_64 and
+aarch64 release artifacts are pinned by SHA-256. When upstream does not publish
+a Linux binary—currently Alacritty and Tokei—the lock records the checksummed
+crates.io source archive and reports `locked_source` rather than inventing a
+binary. `hazards provision acquire-plan` performs no network or filesystem I/O.
 
 ## Build and validate
 
@@ -97,9 +108,10 @@ For a source checkout, the bootstrap helper installs the `hazards` binary into
     --role development
 ```
 
-It intentionally refuses to download and execute an unverified release. A
-checksummed binary-release path belongs to the release phase, not to a
-foundation PR wearing a fake moustache.
+It intentionally refuses to download and execute a release. The acquisition
+lock now supplies reviewable digests, but retrieval, verification, extraction,
+replacement, and rollback still require an explicit executor rather than a
+bootstrap script wearing a fake moustache.
 
 ## Design documentation
 
@@ -109,11 +121,12 @@ foundation PR wearing a fake moustache.
 - [Stack-ronym decision](docs/adr/0001-stack-ronym.md)
 - [State ownership decision](docs/adr/0002-state-ownership.md)
 - [Planning before mutation decision](docs/adr/0003-planning-before-mutation.md)
+- [Acquisition evidence decision](docs/adr/0004-lock-acquisition-evidence.md)
 
 ## Status
 
-The CLI, registry, profile resolver, diagnostic model, read-only provision
-planner, Rhai recipe compiler, starter pillar configurations, and state schema
-are functional. Verified installation of external applications, Dotter-driven
-deployment, SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal
-interface follow in later phases.
+The CLI, registry, profile resolver, diagnostic model, read-only provision and
+acquisition planners, Rhai recipe compiler, starter pillar configurations, and
+state schema are functional. Verified retrieval and installation of external
+applications, Dotter-driven deployment, SurrealDB runtime wiring, Zellij
+automation, and the Ratatui Arsenal interface follow in later phases.

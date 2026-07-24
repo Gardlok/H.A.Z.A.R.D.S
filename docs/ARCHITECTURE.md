@@ -53,6 +53,24 @@ The resulting plan is deterministic and serializable as JSON. `installed`,
 instructions. The plan contains an advisory target, source locator, and
 destination, but there is deliberately no executor behind it yet.
 
+## Acquisition evidence
+
+`hazards provision acquire-plan` composes the host observation with the
+embedded Arsenal acquisition lock. It emits only missing, outdated, or
+unsupported tools and selects an exact operating-system/architecture record.
+The lock currently covers Linux x86_64 and aarch64:
+
+- upstream prebuilt assets are locked to their exact URL, byte count, archive
+  format, and GitHub-recorded SHA-256 digest;
+- tools without upstream Linux binaries use an architecture-neutral crates.io
+  source archive and registry checksum;
+- a target without either record is reported as `unavailable`.
+
+The acquisition plan is pure and deterministic. It neither queries upstream
+services nor retrieves the URL it reports. `locked_source` means only that the
+top-level crate bytes are pinned; it does not claim that build dependencies,
+native libraries, or compiler inputs have been resolved.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
@@ -60,8 +78,11 @@ destination, but there is deliberately no executor behind it yet.
   limits.
 - Environment probes accept an executable plus argument vector from the
   validated registry rather than shell text.
-- A future installer must verify a pinned artifact digest before any archive is
-  unpacked or executable is replaced; release metadata alone is insufficient.
+- A future retriever must hash downloaded bytes and compare them to the lock
+  before any archive is unpacked or executable is replaced.
+- A digest copied from upstream metadata provides integrity after review, not
+  independent publisher identity. Signed provenance remains a separate layer.
+- Source-archive checksums do not lock a transitive Cargo dependency graph.
 - Dotfiles never contain secrets.
 - SurrealDB never becomes a credential vault.
 - Remote Zellij control remains bound to the authenticated host session.
