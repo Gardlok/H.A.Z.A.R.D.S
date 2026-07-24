@@ -102,6 +102,44 @@ can execute on the host. Multi-tool acquisition is not transactional: each
 successfully verified content-addressed object remains useful if a later
 network request fails.
 
+## Safe materialization
+
+`hazards provision materialize` converts an actionable, verified cache object
+into inert private staging. Its authority stops at:
+
+- content-addressed trees under
+  `$XDG_CACHE_HOME/hazards/staging/sha256/<prefix>/<artifact-digest>`;
+- append-only JSON receipts under
+  `$XDG_STATE_HOME/hazards/receipts/materializations/<tool>/<version>`.
+
+The command requires explicit `--tool` selections or `--all`, uses the same
+profile and acquisition planners as retrieval, and performs no network I/O.
+Before use, the cache object's type, size, and digest are verified again.
+
+Archive extraction accepts locked binary, TAR/GZip, TAR/XZ, and ZIP formats.
+Every entry must be a safe relative UTF-8 path. Absolute paths, parent
+components, backslashes, links, special files, duplicates, encrypted ZIP
+members, excessive entry counts, oversized entries, and excessive aggregate
+expansion fail closed. Archived permissions, ownership, and timestamps are
+discarded. HAZARDS creates directories as `0700` and files as `0600`; staged
+payloads therefore cannot execute.
+
+The acquisition lock separately identifies the exact payload by relative path,
+byte count, and SHA-256 digest. The materializer verifies all three after
+extraction, then checks that the payload is a 64-bit little-endian Linux ELF of
+the locked architecture. Source artifacts are rejected because they do not
+contain a locked executable identity.
+
+A deterministic manifest inventories the resulting tree. Persistence is an
+atomic rename from a private sibling temporary directory. An existing stage is
+not trusted by its content-addressed name: HAZARDS reproduces a fresh candidate
+from the locked object, validates the existing tree and manifest, and requires
+the two manifests to match before reporting a stage hit. Successful events
+produce append-only materialization receipts.
+
+This phase does not execute a payload, set executable permissions, install or
+replace a command, modify `PATH`, or write to `~/.local/bin`.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
@@ -111,8 +149,12 @@ network request fails.
   validated registry rather than shell text.
 - The acquisition retriever hashes downloaded bytes and compares them to the
   lock before admitting them to the private cache.
-- Cached artifacts remain untrusted input to the future materializer. Archive
-  paths, links, payload layout, and executable identity have not been approved.
+- Cached artifacts remain untrusted input. The materializer enforces archive
+  path and type rules, expansion bounds, exact payload identity, and ELF
+  architecture before admitting an inert private staging tree.
+- Staged artifacts remain untrusted for execution. Runtime dependency checks,
+  transactional replacement, PATH validation, health checks, and rollback
+  belong to the future installer.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
 - Source-archive checksums do not lock a transitive Cargo dependency graph.
