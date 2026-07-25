@@ -1,3 +1,5 @@
+theme = "autumn_night"
+
 [editor]
 auto-format = true
 bufferline = "multiple"

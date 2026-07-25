@@ -39,7 +39,13 @@ jobs:
             XDG_STATE_HOME="$HAZARDS_CI_HOME/state" \
             XDG_CACHE_HOME="$HAZARDS_CI_HOME/cache" \
             cargo run -p hazards-cli -- dotfiles generate --host remote --persistence ghost --role operations --json
+          HOME="$HAZARDS_CI_HOME" \
+            XDG_STATE_HOME="$HAZARDS_CI_HOME/state" \
+            XDG_CACHE_HOME="$HAZARDS_CI_HOME/cache" \
+            cargo run -p hazards-cli -- dotfiles plan --host remote --persistence ghost --role operations --json
           cargo run -p hazards-cli -- dotfiles dry-run --help
+          cargo run -p hazards-cli -- dotfiles deploy --help
+          cargo run -p hazards-cli -- dotfiles rollback --help
           cargo run -p hazards-cli -- recipe check
 
   msrv:

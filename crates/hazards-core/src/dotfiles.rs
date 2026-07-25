@@ -26,6 +26,14 @@ use crate::{
     provision::version_matches,
 };
 
+mod deployment;
+
+pub use deployment::{
+    DotfileAdoptionAction, DotfileAdoptionItem, DotfileDeploymentOutcome, DotfileDeploymentPlan,
+    DotfileDeploymentReceipt, DotfileDeploymentReport, DotfileRollbackReceipt,
+    DotfileRollbackReport, DotfileRollbackResult, DotfileTargetKind,
+};
+
 const PROFILE_SCHEMA_VERSION: u8 = 1;
 const GENERATION_RECEIPT_SCHEMA_VERSION: u8 = 1;
 const DRY_RUN_RECEIPT_SCHEMA_VERSION: u8 = 1;
@@ -161,7 +169,8 @@ pub struct DotterInvocation<'a> {
     pub capture_directory: &'a Path,
 }
 
-/// Bounded process result used by the dry-run verifier.
+/// Bounded process result used by Dotter preview and deployment verification.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DotterCommandOutput {
     pub exit_code: Option<i32>,
     pub stdout: Vec<u8>,
@@ -179,6 +188,7 @@ impl DotterCommandOutput {
 pub trait DotterRunner {
     fn version(&self, executable: &Path, capture_directory: &Path) -> Result<String, String>;
     fn dry_run(&self, invocation: DotterInvocation<'_>) -> Result<DotterCommandOutput, String>;
+    fn deploy(&self, invocation: DotterInvocation<'_>) -> Result<DotterCommandOutput, String>;
 }
 
 /// Real bounded, shell-free Dotter process execution.
@@ -215,9 +225,19 @@ impl DotterRunner for SystemDotterRunner {
             DRY_RUN_TIMEOUT,
         )
     }
+
+    fn deploy(&self, invocation: DotterInvocation<'_>) -> Result<DotterCommandOutput, String> {
+        run_bounded(
+            invocation.executable,
+            Some(invocation.working_directory),
+            invocation.arguments,
+            invocation.capture_directory,
+            DRY_RUN_TIMEOUT,
+        )
+    }
 }
 
-/// Profile-aware Dotter configuration generation and verified dry-run.
+/// Profile-aware Dotter generation, preview, deployment, and recovery.
 pub struct DotfilesManager<'a, R = SystemDotterRunner> {
     registry: &'a Registry,
     profile: &'a ResolvedProfile,
@@ -533,10 +553,7 @@ impl<'a, R: DotterRunner> DotfilesManager<'a, R> {
     }
 
     fn validate_generated_profile(&self, expected: &ExpectedProfile) -> Result<(), DotfilesError> {
-        let directory = ensure_private_subdirectories(
-            &self.paths.state,
-            &["dotter", "profiles", &expected.manifest.profile_id],
-        )?;
+        let directory = self.profile_directory(&expected.manifest.profile_id);
         let local_path = directory.join("local.toml");
         let manifest_path = directory.join("manifest.json");
         let local = read_required_private_file(&local_path)?;
@@ -642,6 +659,16 @@ pub enum DotfilesError {
     DotterVersion { expected: String, actual: String },
     #[error("Dotter execution failed: {0}")]
     DotterExecution(String),
+    #[error("dotfile adoption is blocked: {0}")]
+    AdoptionBlocked(String),
+    #[error("dotfile deployment confirmation does not match the current plan")]
+    ConfirmationMismatch,
+    #[error("dotfile transaction {0} needs rollback before another deployment")]
+    PendingTransaction(String),
+    #[error("no recoverable dotfile deployment exists for profile {0}")]
+    NoDeployment(String),
+    #[error("dotfile recovery failed for transaction {transaction}: {detail}")]
+    RecoveryFailed { transaction: String, detail: String },
     #[error("watched dotfile is too large to fingerprint safely: {path} ({size} bytes)")]
     WatchedFileTooLarge { path: PathBuf, size: u64 },
     #[error("Dotter configuration or evidence is invalid: {0}")]
@@ -676,7 +703,7 @@ impl Drop for DotfilesLock {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 struct PathFingerprint {
     kind: FingerprintKind,
     size: u64,
@@ -686,7 +713,8 @@ struct PathFingerprint {
     modified_nanos: Option<u128>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 enum FingerprintKind {
     Absent,
     File,
@@ -1205,6 +1233,10 @@ mod tests {
                 stderr: self.output.stderr.clone(),
                 failure: self.output.failure.clone(),
             })
+        }
+
+        fn deploy(&self, invocation: DotterInvocation<'_>) -> Result<DotterCommandOutput, String> {
+            self.dry_run(invocation)
         }
     }
 

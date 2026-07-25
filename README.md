@@ -88,6 +88,19 @@ $ cargo run -p hazards-cli -- dotfiles dry-run \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- dotfiles plan \
+    --host desktop \
+    --persistence local \
+    --role development
+$ cargo run -p hazards-cli -- dotfiles deploy \
+    --host desktop \
+    --persistence local \
+    --role development \
+    --confirm 'sha256:<token-from-plan>'
+$ cargo run -p hazards-cli -- dotfiles rollback \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -210,6 +223,31 @@ Dry-run receipts are intentional HAZARDS state writes. No configuration target
 is supposed to change, because apparently software needs independent witnesses
 before the phrase “dry run” may be admitted into evidence.
 
+`hazards dotfiles plan` is a strictly read-only adoption inspection. It
+classifies absent targets, already-managed links, regular files requiring
+backup, and blocked filesystem objects. Real directory ancestors beneath
+`HOME` are required; an ancestor symlink is refused rather than followed. A
+ready plan emits a SHA-256 confirmation token binding the generated profile,
+ingredient hashes, and current target and ancestor fingerprints.
+
+`hazards dotfiles deploy --confirm <token>` recalculates that plan under the
+per-profile lock and refuses stale confirmation. It verifies the managed Dotter
+activation, privately copies and rehashes every displaced regular file, writes
+durable prepared transaction evidence, and only then removes adopted files.
+With conflicts out of the way it performs another bounded, mutation-checked
+Dotter dry-run. Actual deployment proceeds only after that preview succeeds.
+The deploy invocation remains shell-free, noninteractive, hook-disabled, and
+does not use `--force`.
+
+Every declared target must finish as a symlink to its exact selected ingredient.
+A command or link-verification failure automatically restores backed-up files
+and removes links created over previously absent targets. Successful and
+restored outcomes are append-only transaction events.
+`hazards dotfiles rollback` restores the newest committed or interrupted
+transaction only after verifying its backups and proving no target contains
+unrelated later data. Original file bytes and permission modes are restored;
+unexpected edits are never overwritten.
+
 ## Build and validate
 
 HAZARDS uses Rust 2024 and supports Rust 1.85 or newer.
@@ -250,6 +288,7 @@ moustache.
 - [Safe materialization decision](docs/adr/0006-safe-materialization.md)
 - [Transactional user installation decision](docs/adr/0007-transactional-user-installation.md)
 - [Verified Dotter preview decision](docs/adr/0008-verified-dotter-preview.md)
+- [Transactional Dotter deployment decision](docs/adr/0009-transactional-dotter-deployment.md)
 
 ## Status
 
@@ -258,5 +297,7 @@ acquisition planners, verified acquisition cache, Rhai recipe compiler, starter
 pillar configurations, safe payload materialization, and state schema are
 functional. Transactional installation and rollback of locked prebuilt
 applications, profile-aware Dotter generation, and verified deployment dry-runs
-are also functional. Confirmed Dotter deployment, SurrealDB runtime wiring,
-Zellij automation, and the Ratatui Arsenal interface follow in later phases.
+are also functional. Read-only adoption planning, confirmed transactional
+Dotter deployment, automatic recovery, and explicit rollback are functional.
+SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal interface
+follow in later phases.
