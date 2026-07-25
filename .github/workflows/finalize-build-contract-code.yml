@@ -19,19 +19,37 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-      - name: Format and validate
+      - name: Format and capture validation
         run: |
-          set -euo pipefail
+          set -u
           cargo fmt --all
-          cargo check --workspace
-          cargo clippy --workspace --all-targets -- -D warnings
-          cargo test --workspace
-      - name: Commit validated formatting
+          : > .hazards-build-contract-validation.log
+          status=0
+          for command in \
+            'cargo check --workspace' \
+            'cargo clippy --workspace --all-targets -- -D warnings' \
+            'cargo test --workspace'
+          do
+            printf '\n$ %s\n' "$command" >> .hazards-build-contract-validation.log
+            if ! bash -o pipefail -c "$command" >> .hazards-build-contract-validation.log 2>&1; then
+              status=1
+            fi
+          done
+          printf '\nvalidation_status=%s\n' "$status" >> .hazards-build-contract-validation.log
+      - name: Commit result
         run: |
           set -euo pipefail
-          rm -- .github/workflows/finalize-build-contract-code.yml
+          status="$(sed -n 's/^validation_status=//p' .hazards-build-contract-validation.log | tail -1)"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add --all
-          git commit -m 'Finalize pinned build contract implementation'
+          if test "$status" = 0
+          then
+            rm -- .hazards-build-contract-validation.log
+            rm -- .github/workflows/finalize-build-contract-code.yml
+            git add --all
+            git commit -m 'Finalize pinned build contract implementation'
+          else
+            git add --all
+            git commit -m 'Record pinned build contract validation failure'
+          fi
           git push origin HEAD:agent/pinned-build-contract
