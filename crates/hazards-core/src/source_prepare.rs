@@ -92,6 +92,25 @@ pub struct PreparedSource {
     pub receipt: SourcePreparationReceipt,
 }
 
+/// Read-only verification of an existing prepared source stage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VerifiedPreparedSource {
+    pub staging_path: PathBuf,
+    pub source_path: PathBuf,
+    pub manifest_path: PathBuf,
+    pub cargo_manifest_path: PathBuf,
+    pub cargo_lock_path: PathBuf,
+    pub artifact_sha256: String,
+    pub manifest_sha256: String,
+    pub cargo_lock_sha256: String,
+    pub cargo_lock_version: u32,
+    pub package_count: usize,
+    pub registry_package_count: usize,
+    pub local_package_count: usize,
+    pub entry_count: usize,
+    pub expanded_size: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 struct SourcePreparationManifest {
     schema_version: u8,
@@ -186,6 +205,46 @@ impl SourcePreparer {
         };
 
         self.finish(item, artifact, source_lock, staging_path, manifest, outcome)
+    }
+
+    /// Revalidate an existing source stage without creating state or receipts.
+    pub fn verify_existing(
+        &self,
+        item: &AcquisitionItem,
+    ) -> Result<VerifiedPreparedSource, SourcePreparationError> {
+        let (artifact, source_lock, _object_path) = self.resolve(item)?;
+        let staging_path = self
+            .cache_root
+            .join("sources")
+            .join("sha256")
+            .join(&artifact.sha256[..2])
+            .join(&artifact.sha256);
+        let manifest = validate_existing_stage(&staging_path, artifact, source_lock)?;
+        let expanded_size = manifest
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == PreparedSourceEntryKind::File)
+            .try_fold(0_u64, |total, entry| total.checked_add(entry.size))
+            .ok_or(SourcePreparationError::ExpandedTooLarge {
+                maximum: MAX_EXPANDED_SIZE,
+            })?;
+        let source_path = staging_path.join(&source_lock.root);
+        Ok(VerifiedPreparedSource {
+            manifest_path: staging_path.join(MANIFEST_NAME),
+            cargo_manifest_path: source_path.join("Cargo.toml"),
+            cargo_lock_path: source_path.join("Cargo.lock"),
+            staging_path,
+            source_path,
+            artifact_sha256: artifact.sha256.clone(),
+            manifest_sha256: source_lock.manifest_sha256.clone(),
+            cargo_lock_sha256: source_lock.cargo_lock_sha256.clone(),
+            cargo_lock_version: source_lock.cargo_lock_version,
+            package_count: source_lock.package_count,
+            registry_package_count: manifest.registry_package_count,
+            local_package_count: manifest.local_package_count,
+            entry_count: manifest.entries.len(),
+            expanded_size,
+        })
     }
 
     fn resolve<'a>(
