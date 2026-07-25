@@ -107,6 +107,17 @@ pub struct RolledBackArtifact {
     pub receipt: InstallationReceipt,
 }
 
+/// A HAZARDS-managed command whose store, payload, version, and PATH activation
+/// were independently verified.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ManagedActivation {
+    pub tool_id: String,
+    pub version: String,
+    pub activation_path: PathBuf,
+    pub payload_path: PathBuf,
+    pub version_output: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 struct InstallationManifest {
     schema_version: u8,
@@ -289,6 +300,33 @@ impl<P: EnvironmentProbe> Installer<P> {
             activation_path,
             receipt_path,
             receipt,
+        })
+    }
+
+    pub fn verify_active(
+        &self,
+        tool_id: &str,
+        command: &str,
+        version_args: &[String],
+    ) -> Result<ManagedActivation, InstallationError> {
+        validate_component("tool identifier", tool_id)?;
+        validate_command(command)?;
+        let _lock = self.acquire_lock(tool_id)?;
+        let activation_path = self.bin_root.join(command);
+        let current = self.inspect_activation(&activation_path, tool_id, command)?;
+        let payload_path = current
+            .target()
+            .cloned()
+            .ok_or_else(|| InstallationError::NoActiveInstallation(tool_id.to_owned()))?;
+        let manifest = self.validate_managed_target(&payload_path, tool_id, command)?;
+        let version_output =
+            self.verify_activation(&activation_path, command, version_args, &manifest.version)?;
+        Ok(ManagedActivation {
+            tool_id: tool_id.to_owned(),
+            version: manifest.version,
+            activation_path,
+            payload_path,
+            version_output,
         })
     }
 
@@ -1808,6 +1846,12 @@ mod tests {
             .expect("repeated installation should verify");
         assert_eq!(repeated.receipt.outcome, InstallationOutcome::AlreadyActive);
         assert_eq!(repeated.receipt.store_outcome, StoreOutcome::StoreHit);
+        let active = installer
+            .verify_active("dotter", "dotter", &["--version".to_owned()])
+            .expect("managed activation should verify");
+        assert_eq!(active.version, "0.13.5");
+        assert_eq!(active.activation_path, installed.activation_path);
+        assert_eq!(active.payload_path, installed.payload_path);
 
         let rolled_back = installer
             .rollback("dotter", "dotter", &["--version".to_owned()])

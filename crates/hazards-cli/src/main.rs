@@ -4,9 +4,10 @@ use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser, Subcommand};
 use hazards_core::{
     AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, ArtifactAcquirer,
-    CheckStatus, Doctor, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
+    CheckStatus, Doctor, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
+    GeneratedDotterProfile, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
     Persistence, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus, ResolvedProfile,
-    Role, RolledBackArtifact, StagedArtifact, VerifiedArtifact,
+    Role, RolledBackArtifact, StagedArtifact, SystemDotterRunner, VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -50,6 +51,11 @@ enum Command {
     Provision {
         #[command(subcommand)]
         command: ProvisionCommand,
+    },
+    /// Generate and inspect profile-aware dotfile deployment.
+    Dotfiles {
+        #[command(subcommand)]
+        command: DotfilesCommand,
     },
     /// Inspect sandboxed Rhaisour recipes.
     Recipe {
@@ -95,6 +101,14 @@ enum ProvisionCommand {
     Rollback(RollbackArgs),
 }
 
+#[derive(Debug, Subcommand)]
+enum DotfilesCommand {
+    /// Generate deterministic Dotter configuration in HAZARDS state.
+    Generate(DotfilesArgs),
+    /// Run Dotter's deploy dry-run and verify every declared target stayed unchanged.
+    DryRun(DotfilesArgs),
+}
+
 #[derive(Debug, Clone, Args)]
 struct ProfileArgs {
     #[arg(long, default_value = "desktop")]
@@ -133,6 +147,15 @@ struct RollbackArgs {
     /// Emit machine-readable JSON.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+struct DotfilesArgs {
+    #[command(flatten)]
+    profile: ProfileArgs,
+    /// HAZARDS checkout root; discovered from the current directory when omitted.
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -177,6 +200,7 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
             if json {
                 println!("{}", serde_json::to_string_pretty(&paths)?);
             } else {
+                println!("home    {}", paths.home.display());
                 println!("config  {}", paths.config.display());
                 println!("data    {}", paths.data.display());
                 println!("state   {}", paths.state.display());
@@ -189,8 +213,53 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
         Command::Profile { command } => run_profile(command),
         Command::Doctor(args) => run_doctor(args),
         Command::Provision { command } => run_provision(command),
+        Command::Dotfiles { command } => run_dotfiles(command),
         Command::Recipe { command } => run_recipe(command),
     }
+}
+
+fn run_dotfiles(command: DotfilesCommand) -> Result<ExitCode, Box<dyn Error>> {
+    let registry = Registry::embedded()?;
+    let (args, dry_run) = match command {
+        DotfilesCommand::Generate(args) => (args, false),
+        DotfilesCommand::DryRun(args) => (args, true),
+    };
+    let profile = resolve_profile(&args.profile);
+    let paths = HazardsPaths::from_env()?;
+    let root = match args.root.as_deref() {
+        Some(root) => root.to_path_buf(),
+        None => {
+            DotfilesManager::<SystemDotterRunner>::discover_workspace(std::env::current_dir()?)?
+        }
+    };
+    let manager = DotfilesManager::new(&registry, &profile, &paths, root)?;
+
+    if !dry_run {
+        let generated = manager.generate()?;
+        if args.profile.json {
+            println!("{}", serde_json::to_string_pretty(&generated)?);
+        } else {
+            print_generated_dotter_profile(&generated);
+            println!("mode: HAZARDS state only; no dotfile target was read or changed");
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let (command, version_args) = registry
+        .command_spec("dotter")
+        .ok_or_else(|| cli_error("Dotter has no external command specification"))?;
+    let activation = Installer::for_paths(&paths).verify_active("dotter", command, version_args)?;
+    let report = manager.dry_run(&activation)?;
+    if args.profile.json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print_dotter_dry_run(&report);
+    }
+    Ok(if report.receipt.outcome == DotterDryRunOutcome::Clean {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
 }
 
 fn run_arsenal(command: ArsenalCommand) -> Result<ExitCode, Box<dyn Error>> {
@@ -603,6 +672,73 @@ fn print_rolled_back_artifact(artifact: &RolledBackArtifact) {
     );
 }
 
+fn print_generated_dotter_profile(generated: &GeneratedDotterProfile) {
+    println!(
+        "[{:<10}] {}",
+        generated.receipt.outcome, generated.manifest.profile_id
+    );
+    println!(
+        "             packages  {}",
+        generated.manifest.packages.join(", ")
+    );
+    println!(
+        "             mappings  {}",
+        generated.manifest.mappings.len()
+    );
+    println!(
+        "             local     {}",
+        generated.local_config_path.display()
+    );
+    println!(
+        "             manifest  {}",
+        generated.manifest_path.display()
+    );
+    println!(
+        "             receipt   {}",
+        generated.receipt_path.display()
+    );
+}
+
+fn print_dotter_dry_run(report: &DotterDryRunReport) {
+    if !report.stdout.trim().is_empty() {
+        println!("{}", report.stdout.trim_end());
+    }
+    if !report.stderr.trim().is_empty() {
+        eprintln!("{}", report.stderr.trim_end());
+    }
+    println!(
+        "[{:<17}] {}",
+        report.receipt.outcome, report.receipt.profile_id
+    );
+    println!(
+        "                   dotter    {}",
+        report.executable.display()
+    );
+    println!(
+        "                   watched   {} paths",
+        report.receipt.watched_path_count
+    );
+    if !report.receipt.changed_paths.is_empty() {
+        println!(
+            "                   changed   {}",
+            report
+                .receipt
+                .changed_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    println!(
+        "                   receipt   {}",
+        report.receipt_path.display()
+    );
+    println!(
+        "mode: Dotter --dry-run completed; declared targets were fingerprinted before and after"
+    );
+}
+
 fn cli_error(message: impl Into<String>) -> Box<dyn Error> {
     Box::new(io::Error::other(message.into()))
 }
@@ -988,6 +1124,67 @@ mod tests {
 
         assert_eq!(args.tool, "dotter");
         assert!(args.json);
+    }
+
+    #[test]
+    fn parses_profile_aware_dotfile_generation() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "dotfiles",
+            "generate",
+            "--host",
+            "remote",
+            "--persistence",
+            "ghost",
+            "--role",
+            "operations",
+            "--root",
+            "/tmp/hazards",
+            "--json",
+        ])
+        .expect("dotfile generation arguments should parse");
+
+        let Some(Command::Dotfiles {
+            command: DotfilesCommand::Generate(args),
+        }) = cli.command
+        else {
+            panic!("expected dotfile generation command");
+        };
+
+        assert_eq!(args.profile.host, HostKind::Remote);
+        assert_eq!(args.profile.persistence, Persistence::Ghost);
+        assert_eq!(args.profile.role, Role::Operations);
+        assert_eq!(args.root, Some(PathBuf::from("/tmp/hazards")));
+        assert!(args.profile.json);
+    }
+
+    #[test]
+    fn parses_profile_aware_dotter_dry_run() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "dotfiles",
+            "dry-run",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+        ])
+        .expect("Dotter dry-run arguments should parse");
+
+        let Some(Command::Dotfiles {
+            command: DotfilesCommand::DryRun(args),
+        }) = cli.command
+        else {
+            panic!("expected Dotter dry-run command");
+        };
+
+        assert_eq!(args.profile.host, HostKind::Desktop);
+        assert_eq!(args.profile.persistence, Persistence::Local);
+        assert_eq!(args.profile.role, Role::Development);
+        assert!(args.root.is_none());
+        assert!(!args.profile.json);
     }
 
     #[test]

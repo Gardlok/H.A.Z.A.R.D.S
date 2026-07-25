@@ -3,6 +3,7 @@
 pub mod acquire;
 pub mod acquisition;
 pub mod doctor;
+pub mod dotfiles;
 pub mod install;
 pub mod materialize;
 pub mod paths;
@@ -16,9 +17,13 @@ pub use acquire::{
 };
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
 pub use doctor::{Check, CheckStatus, Doctor};
+pub use dotfiles::{
+    DotfileMapping, DotfilesError, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
+    DotterGenerationOutcome, GeneratedDotterProfile, SystemDotterRunner,
+};
 pub use install::{
     InstallationError, InstallationOutcome, InstallationReceipt, InstalledArtifact, Installer,
-    RolledBackArtifact, StoreOutcome,
+    ManagedActivation, RolledBackArtifact, StoreOutcome,
 };
 pub use materialize::{
     MaterializationError, MaterializationOutcome, MaterializationReceipt, Materializer,

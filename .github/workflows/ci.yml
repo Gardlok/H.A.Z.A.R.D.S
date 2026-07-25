@@ -34,6 +34,12 @@ jobs:
           cargo run -p hazards-cli -- provision materialize --help
           cargo run -p hazards-cli -- provision install --help
           cargo run -p hazards-cli -- provision rollback --help
+          HAZARDS_CI_HOME="$(mktemp -d)"
+          HOME="$HAZARDS_CI_HOME" \
+            XDG_STATE_HOME="$HAZARDS_CI_HOME/state" \
+            XDG_CACHE_HOME="$HAZARDS_CI_HOME/cache" \
+            cargo run -p hazards-cli -- dotfiles generate --host remote --persistence ghost --role operations --json
+          cargo run -p hazards-cli -- dotfiles dry-run --help
           cargo run -p hazards-cli -- recipe check
 
   msrv:
