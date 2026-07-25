@@ -11,6 +11,7 @@ pub mod probe;
 pub mod profile;
 pub mod provision;
 pub mod source_build;
+pub mod source_prepare;
 
 pub use acquire::{
     AcquisitionOutcome, AcquisitionReceipt, ArtifactAcquirer, ArtifactPayload, ArtifactSource,
@@ -40,3 +41,7 @@ pub use provision::{
     Platform, ProvisionItem, ProvisionKind, ProvisionPlan, ProvisionPlanner, ProvisionStatus,
 };
 pub use source_build::{SourceBuildItem, SourceBuildPlan, SourceBuildPlanner, SourceBuildStatus};
+pub use source_prepare::{
+    PreparedSource, SourcePreparationError, SourcePreparationOutcome, SourcePreparationReceipt,
+    SourcePreparer,
+};
