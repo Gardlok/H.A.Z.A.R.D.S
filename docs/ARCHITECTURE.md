@@ -134,6 +134,43 @@ preparation, dependency acquisition, build-script execution, compilation,
 result identity, and transactional activation remain separate future
 boundaries.
 
+## Controlled source preparation
+
+`hazards-source-prepare` converts an explicitly selected, graph-locked crates.io
+object into inert private source staging. Its authority stops at:
+
+- content-addressed trees under
+  `$XDG_CACHE_HOME/hazards/sources/sha256/<prefix>/<artifact-digest>`;
+- append-only JSON receipts under
+  `$XDG_STATE_HOME/hazards/receipts/source-preparations/<tool>/<version>`.
+
+The companion command independently revalidates the cached object's method,
+format, digest evidence, type, byte count, SHA-256 digest, package identity, source
+root, pinned manifest and lockfile, registry sources, dependency checksums, and
+graph counts. Extraction then hashes and counts the exact compressed stream it
+consumes, so a cache-path replacement or in-place mutation cannot silently cross
+the verification-to-extraction boundary.
+
+Only bounded regular files and directories beneath the exact locked source root
+are accepted. Absolute paths, parent components, backslashes, links, special
+entries, duplicate paths, excessive entry sizes, and excessive aggregate
+expansion fail closed. Archived permissions, ownership, and timestamps are
+discarded. HAZARDS creates directories as `0700` and files as `0600`.
+
+A deterministic manifest binds the acquisition digest, Cargo identities, package
+counts, and every staged file's relative path, size, and SHA-256. Persistence is
+an atomic rename from a private sibling candidate. Existing staging is never
+trusted by its content-addressed name: HAZARDS reproduces a fresh candidate,
+validates the existing manifest and actual tree, and requires complete equality
+before reporting `stage_hit`.
+
+This phase performs no network request, Cargo invocation, dependency retrieval,
+build-script execution, compiler or linker execution, executable permission
+change, installation, activation, or `PATH` mutation. The resulting source is
+inert build input. Dependency acquisition, toolchain identity, native libraries,
+sandboxed execution, output identity, installation, and rollback remain separate
+authorization boundaries.
+
 ## Safe materialization
 
 `hazards provision materialize` converts an actionable, verified cache object

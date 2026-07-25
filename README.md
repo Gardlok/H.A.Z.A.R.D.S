@@ -73,6 +73,11 @@ $ cargo run -p hazards-cli -- provision acquire \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli --bin hazards-source-prepare -- \
+    --tool alacritty \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- provision materialize \
     --tool zellij \
     --host desktop \
@@ -165,6 +170,27 @@ libraries, build scripts, or resulting executable are reproducible or trusted.
 The command never extracts source, contacts Cargo, invokes a build script,
 compiles code, or installs anything. A missing cache is reported as
 `cache_missing` so acquisition remains its own explicit boundary.
+
+`hazards-source-prepare` is the next explicit mutation boundary for locked
+crates. It requires a verified cached source object and independently revalidates
+the artifact method, format, digest evidence, package identity, source root,
+published manifest, lockfile, and complete Cargo graph before creating state. The
+exact compressed bytes consumed during extraction are hashed and counted again,
+preventing a changed object from being smuggled between verification and source
+preparation.
+
+Only bounded regular files and directories beneath the single locked source root
+are accepted. Archived permissions, ownership, and timestamps are discarded;
+directories become mode `0700` and files become mode `0600`. The complete tree is
+inventoried beneath `~/.cache/hazards/sources/sha256`, then atomically persisted
+with a private identity manifest. Existing trees are freshly reproduced and
+compared before a `stage_hit` is reported. Append-only evidence lives under
+`~/.local/state/hazards/receipts/source-preparations/<tool>/<version>`.
+
+Source preparation performs no network request, Cargo invocation, dependency
+download, build-script execution, compilation, executable permission change,
+installation, activation, or `PATH` mutation. The result is inert reviewed input
+for a later build authority—not a cunningly renamed `cargo install`.
 
 `hazards provision materialize` is the next deliberately narrow mutation. It
 requires the same explicit selection, rehashes the locked cache object, and
