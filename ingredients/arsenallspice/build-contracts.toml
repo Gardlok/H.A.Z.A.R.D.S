@@ -11,7 +11,9 @@ rust_release = "1.97.1"
 rustc_commit_hash = "8bab26f4f68e0e26f0bb7960be334d5b520ea452"
 rustc_commit_date = "2026-07-14"
 cargo_release = "1.97.1"
-llvm_major = 21
+cargo_commit_hash = "c980f4866141969fab6254a680546a277789d6f0"
+cargo_commit_date = "2026-06-30"
+llvm_major = 22
 commands = [
   { id = "rustc", candidates = ["rustc"], args = ["-vV"] },
   { id = "cargo", candidates = ["cargo"], args = ["-Vv"] },
@@ -44,7 +46,9 @@ rust_release = "1.97.1"
 rustc_commit_hash = "8bab26f4f68e0e26f0bb7960be334d5b520ea452"
 rustc_commit_date = "2026-07-14"
 cargo_release = "1.97.1"
-llvm_major = 21
+cargo_commit_hash = "c980f4866141969fab6254a680546a277789d6f0"
+cargo_commit_date = "2026-06-30"
+llvm_major = 22
 commands = [
   { id = "rustc", candidates = ["rustc"], args = ["-vV"] },
   { id = "cargo", candidates = ["cargo"], args = ["-Vv"] },

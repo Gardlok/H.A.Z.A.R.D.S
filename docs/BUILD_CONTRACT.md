@@ -31,7 +31,8 @@ The embedded lock currently binds Alacritty 0.17.0 to:
 - Rust and Cargo 1.97.1;
 - rustc commit `8bab26f4f68e0e26f0bb7960be334d5b520ea452`;
 - rustc commit date `2026-07-14`;
-- LLVM major version 21;
+- Cargo commit `c980f4866141969fab6254a680546a277789d6f0` dated `2026-06-30`;
+- LLVM major version 22;
 - the host-specific GNU/Linux target triple.
 
 HAZARDS first locates the `rustc` and `cargo` launchers, asks rustc for its sysroot, and then resolves the real executables beneath that sysroot. The final contract therefore binds immutable toolchain binaries rather than a rustup proxy whose selected channel may later move.

@@ -99,7 +99,9 @@ pub(super) fn probe_toolchain<P: BuildEnvironmentProbe>(
         || leading_version(&llvm_version).first().copied() != Some(u64::from(contract.llvm_major))
     {
         return Err(ToolchainProbeFailure::Mismatch(format!(
-            "toolchain identity mismatch: rustc {rustc_release} {rustc_commit_hash} {rustc_commit_date}, cargo {cargo_release}, host {host}, LLVM {llvm_version}"
+            "toolchain identity mismatch: rustc {rustc_release} {rustc_commit_hash} {rustc_commit_date}, cargo {cargo_release} {} {}, host {host}, LLVM {llvm_version}",
+            cargo_commit_hash.as_deref().unwrap_or("missing"),
+            cargo_commit_date.as_deref().unwrap_or("missing")
         )));
     }
 

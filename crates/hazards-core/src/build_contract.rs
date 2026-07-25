@@ -46,6 +46,8 @@ pub struct BuildContractSpec {
     pub rustc_commit_hash: String,
     pub rustc_commit_date: String,
     pub cargo_release: String,
+    pub cargo_commit_hash: String,
+    pub cargo_commit_date: String,
     pub llvm_major: u32,
     #[serde(default)]
     pub commands: Vec<BuildCommandSpec>,
