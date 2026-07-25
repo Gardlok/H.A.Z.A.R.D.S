@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     env, io,
     path::{Path, PathBuf},
     time::Duration,
@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{AcquisitionItem, AcquisitionStatus, HazardsPaths, Platform, ResolvedProfile};
+use crate::{AcquisitionItem, HazardsPaths, Platform, ResolvedProfile};
 
 mod evidence;
 mod planner;
@@ -23,15 +23,9 @@ pub use planner::BuildContractPlanner;
 
 const EMBEDDED_BUILD_CONTRACTS: &str =
     include_str!("../../../ingredients/arsenallspice/build-contracts.toml");
-const SOURCE_MANIFEST_NAME: &str = ".hazards-source-preparation.json";
-const SOURCE_MANIFEST_SCHEMA_VERSION: u8 = 1;
-const DEPENDENCY_MANIFEST_SCHEMA_VERSION: u8 = 1;
 const MAX_EVIDENCE_SIZE: u64 = 16 * 1024 * 1024;
-const MAX_SOURCE_ENTRIES: usize = 100_000;
-const MAX_SOURCE_SIZE: u64 = 1024 * 1024 * 1024;
 const MAX_PROBE_OUTPUT: u64 = 1024 * 1024;
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
-const CRATES_IO_REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuildContractLock {
@@ -225,59 +219,6 @@ pub struct BuildInvocationTemplate {
     pub network_enabled: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct SourcePreparationManifest {
-    schema_version: u8,
-    tool_id: String,
-    version: String,
-    artifact_sha256: String,
-    source_root: String,
-    manifest_sha256: String,
-    cargo_lock_sha256: String,
-    cargo_lock_version: u32,
-    package_count: usize,
-    registry_package_count: usize,
-    local_package_count: usize,
-    entries: Vec<PreparedSourceEntry>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct PreparedSourceEntry {
-    path: String,
-    kind: PreparedSourceEntryKind,
-    size: u64,
-    sha256: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-enum PreparedSourceEntryKind {
-    Directory,
-    File,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct CargoDependencyManifest {
-    schema_version: u8,
-    tool_id: String,
-    version: String,
-    artifact_sha256: String,
-    cargo_lock_sha256: String,
-    cargo_lock_version: u32,
-    package_count: usize,
-    dependency_count: usize,
-    packages: Vec<CargoDependencyManifestEntry>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct CargoDependencyManifestEntry {
-    name: String,
-    version: String,
-    checksum: String,
-    source_url: String,
-    size: u64,
-}
-
 pub trait BuildEnvironmentProbe {
     fn variable(&self, name: &str) -> Option<String>;
     fn locate(&self, candidates: &[String]) -> Option<PathBuf>;
@@ -331,7 +272,7 @@ enum ToolchainProbeFailure {
 }
 
 impl ToolchainProbeFailure {
-    fn detail(&self) -> &str {
+    pub(super) fn detail(&self) -> &str {
         match self {
             Self::Missing(detail) | Self::Mismatch(detail) => detail,
         }
