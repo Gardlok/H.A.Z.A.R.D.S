@@ -3,8 +3,8 @@ use std::{collections::HashSet, error::Error, io, process::ExitCode};
 use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser};
 use hazards_core::{
-    AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, HazardsPaths, HostKind,
-    Persistence, PreparedSource, ProvisionPlan, ProvisionPlanner, ResolvedProfile, Role,
+    AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, HazardsPaths,
+    HostKind, Persistence, PreparedSource, ProvisionPlan, ProvisionPlanner, ResolvedProfile, Role,
     SourcePreparer,
 };
 
@@ -63,11 +63,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
     let registry = Registry::embedded()?;
     let lock = AcquisitionLock::embedded(&registry)?;
-    let profile = ResolvedProfile::new(
-        cli.profile.host,
-        cli.profile.persistence,
-        cli.profile.role,
-    );
+    let profile = ResolvedProfile::new(cli.profile.host, cli.profile.persistence, cli.profile.role);
     let provision = ProvisionPlanner::new(&registry, &profile).plan();
     let acquisition = AcquisitionPlanner::new(&lock, &provision).plan();
     let selected = select_source_items(&lock, &provision, &acquisition, &cli.selection)?;
@@ -213,13 +209,8 @@ mod tests {
 
     #[test]
     fn source_preparation_rejects_tool_and_all_together() {
-        let error = Cli::try_parse_from([
-            "hazards-source-prepare",
-            "--tool",
-            "alacritty",
-            "--all",
-        ])
-        .expect_err("conflicting selection should fail");
+        let error = Cli::try_parse_from(["hazards-source-prepare", "--tool", "alacritty", "--all"])
+            .expect_err("conflicting selection should fail");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
