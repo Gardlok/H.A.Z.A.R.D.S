@@ -120,6 +120,20 @@ pub struct LockedArtifact {
     pub payload_size: Option<u64>,
     #[serde(default)]
     pub payload_sha256: Option<String>,
+    #[serde(default)]
+    pub source_lock: Option<CargoSourceLock>,
+}
+
+/// Exact identities for the manifest and transitive Cargo lock embedded in a
+/// crates.io source archive.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct CargoSourceLock {
+    pub root: String,
+    pub package: String,
+    pub manifest_sha256: String,
+    pub cargo_lock_sha256: String,
+    pub cargo_lock_version: u32,
+    pub package_count: usize,
 }
 
 /// How the pinned bytes are distributed upstream.
@@ -351,7 +365,7 @@ impl AcquisitionLock {
     }
 
     pub fn validate(&self, registry: &Registry) -> Result<(), AcquisitionError> {
-        if self.schema_version != 2 {
+        if self.schema_version != 3 {
             return Err(AcquisitionError::UnsupportedSchema(self.schema_version));
         }
         if self.observed_at.trim().is_empty() {
@@ -549,6 +563,7 @@ fn validate_artifact(
             ));
         }
     };
+    let source_lock = artifact.source_lock.as_ref();
 
     match (artifact.method, artifact.format, artifact.evidence) {
         (
@@ -586,6 +601,11 @@ fn validate_artifact(
                     "binary payload size and SHA-256 must equal the artifact",
                 ));
             }
+            if source_lock.is_some() {
+                return Err(invalid(
+                    "prebuilt artifact cannot declare a Cargo source lock",
+                ));
+            }
         }
         (
             AcquisitionMethod::CargoRegistry,
@@ -602,6 +622,35 @@ fn validate_artifact(
                 return Err(invalid(
                     "source artifact cannot declare an executable payload",
                 ));
+            }
+            let Some(source_lock) = source_lock else {
+                return Err(invalid(
+                    "source artifact must declare its embedded Cargo lock identity",
+                ));
+            };
+            if source_lock.root != format!("{}-{}", install.locator, install.target_version)
+                || !safe_relative_payload_path(&source_lock.root)
+                || source_lock.root.contains('/')
+            {
+                return Err(invalid(
+                    "source root must be the crate name and version as one safe path component",
+                ));
+            }
+            if source_lock.package != install.locator {
+                return Err(invalid("source package does not match the install locator"));
+            }
+            if !valid_sha256(&source_lock.manifest_sha256)
+                || !valid_sha256(&source_lock.cargo_lock_sha256)
+            {
+                return Err(invalid(
+                    "source manifest and Cargo lock digests must be 64 lowercase hex characters",
+                ));
+            }
+            if source_lock.cargo_lock_version == 0 {
+                return Err(invalid("Cargo lock version is zero"));
+            }
+            if source_lock.package_count == 0 {
+                return Err(invalid("Cargo lock package count is zero"));
             }
         }
         _ => return Err(invalid("method, format, evidence, and URL do not agree")),
@@ -746,7 +795,7 @@ mod tests {
         let lock =
             AcquisitionLock::embedded(&registry).expect("embedded acquisition lock should parse");
 
-        assert_eq!(lock.schema_version, 2);
+        assert_eq!(lock.schema_version, 3);
         assert_eq!(lock.artifacts.len(), 24);
         assert_eq!(
             lock.select("zellij", "0.44.3", "linux", "x86_64")
@@ -767,6 +816,16 @@ mod tests {
                 .method,
             AcquisitionMethod::CargoRegistry
         );
+        let alacritty = lock
+            .select("alacritty", "0.17.0", "linux", "x86_64")
+            .expect("architecture-neutral Alacritty source should exist");
+        let source = alacritty
+            .source_lock
+            .as_ref()
+            .expect("Alacritty should lock its embedded Cargo graph");
+        assert_eq!(source.root, "alacritty-0.17.0");
+        assert_eq!(source.cargo_lock_version, 4);
+        assert_eq!(source.package_count, 292);
     }
 
     #[test]
@@ -836,6 +895,47 @@ mod tests {
             AcquisitionError::InvalidArtifact {
                 id: "zellij".to_owned(),
                 reason: "payload path, size, and SHA-256 must be declared together".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn acquisition_lock_rejects_missing_or_malformed_source_lock_identity() {
+        let registry = Registry::embedded().expect("embedded registry should parse");
+        let source_block = r#"
+[artifacts.source_lock]
+root = "alacritty-0.17.0"
+package = "alacritty"
+manifest_sha256 = "f79a4005a961a2fc67235b5c4aaa6624d5ca7f16337c6b557266d8dd66975da1"
+cargo_lock_sha256 = "a1bd06c9f0bda95630b1ea5ca8dd1478d0de8599b114572846afcda87d4c2861"
+cargo_lock_version = 4
+package_count = 292
+"#;
+        let missing = EMBEDDED_ACQUISITIONS.replacen(source_block, "", 1);
+        let error = AcquisitionLock::parse(&missing, &registry)
+            .expect_err("source artifact without a Cargo lock identity should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::InvalidArtifact {
+                id: "alacritty".to_owned(),
+                reason: "source artifact must declare its embedded Cargo lock identity".to_owned(),
+            }
+        );
+
+        let malformed = EMBEDDED_ACQUISITIONS.replacen(
+            "cargo_lock_sha256 = \"a1bd06c9f0bda95630b1ea5ca8dd1478d0de8599b114572846afcda87d4c2861\"",
+            "cargo_lock_sha256 = \"approximately-correct\"",
+            1,
+        );
+        let error = AcquisitionLock::parse(&malformed, &registry)
+            .expect_err("malformed Cargo lock digest should fail");
+        assert_eq!(
+            error,
+            AcquisitionError::InvalidArtifact {
+                id: "alacritty".to_owned(),
+                reason:
+                    "source manifest and Cargo lock digests must be 64 lowercase hex characters"
+                        .to_owned(),
             }
         );
     }

@@ -683,6 +683,7 @@ mod tests {
                 payload_path: Some("zellij".to_owned()),
                 payload_size: Some(body.len() as u64),
                 payload_sha256: Some(sha256(body)),
+                source_lock: None,
             }),
             detail: String::new(),
         }

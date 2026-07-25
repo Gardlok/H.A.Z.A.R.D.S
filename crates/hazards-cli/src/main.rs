@@ -8,7 +8,8 @@ use hazards_core::{
     DotfileRollbackReport, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
     GeneratedDotterProfile, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
     Persistence, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus, ResolvedProfile,
-    Role, RolledBackArtifact, StagedArtifact, SystemDotterRunner, VerifiedArtifact,
+    Role, RolledBackArtifact, SourceBuildItem, SourceBuildPlan, SourceBuildPlanner,
+    SourceBuildStatus, StagedArtifact, SystemDotterRunner, VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -92,6 +93,8 @@ enum ProvisionCommand {
     Plan(ProfileArgs),
     /// Resolve exact integrity-pinned artifacts without retrieving them.
     AcquirePlan(ProfileArgs),
+    /// Inspect locked crates.io source graphs without extracting or building them.
+    BuildPlan(AcquireArgs),
     /// Download and verify locked artifacts into the private HAZARDS cache.
     Acquire(AcquireArgs),
     /// Safely reproduce verified artifacts in private, non-executable staging.
@@ -467,6 +470,26 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 }
             }
         }
+        ProvisionCommand::BuildPlan(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args.profile);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let acquisition = AcquisitionPlanner::new(&lock, &provision).plan();
+            let selected = select_source_items(&lock, &provision, &acquisition, &args)?;
+            let paths = HazardsPaths::from_env()?;
+            let plan = SourceBuildPlanner::new(&paths, &lock.observed_at).plan(
+                &profile,
+                &provision.platform,
+                &selected,
+            );
+
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+            } else {
+                print_source_build_plan(&plan);
+            }
+        }
         ProvisionCommand::Acquire(args) => {
             let registry = Registry::embedded()?;
             let lock = AcquisitionLock::embedded(&registry)?;
@@ -669,6 +692,56 @@ fn select_install_items(
     Ok(selected)
 }
 
+fn select_source_items(
+    lock: &AcquisitionLock,
+    provision: &ProvisionPlan,
+    acquisition: &AcquisitionPlan,
+    args: &AcquireArgs,
+) -> Result<Vec<AcquisitionItem>, Box<dyn Error>> {
+    let planner = AcquisitionPlanner::new(lock, provision);
+    let selected = if args.all {
+        acquisition
+            .items
+            .iter()
+            .filter(|item| item.status == AcquisitionStatus::LockedSource)
+            .cloned()
+            .collect()
+    } else {
+        let mut seen = HashSet::new();
+        let mut selected = Vec::with_capacity(args.tool.len());
+        for id in &args.tool {
+            if !seen.insert(id) {
+                return Err(cli_error(format!("tool {id} was selected more than once")));
+            }
+            let item = acquisition
+                .items
+                .iter()
+                .find(|item| &item.id == id)
+                .cloned()
+                .or_else(|| {
+                    provision
+                        .items
+                        .iter()
+                        .find(|item| &item.id == id)
+                        .and_then(|item| planner.resolve(item))
+                })
+                .ok_or_else(|| {
+                    cli_error(format!(
+                        "tool {id} is not an external application in the resolved profile"
+                    ))
+                })?;
+            if item.status != AcquisitionStatus::LockedSource {
+                return Err(cli_error(format!(
+                    "tool {id} does not use a locked crates.io source archive"
+                )));
+            }
+            selected.push(item);
+        }
+        selected
+    };
+    Ok(selected)
+}
+
 fn print_verified_artifact(artifact: &VerifiedArtifact) {
     println!(
         "[{:<10}] {:<12} {}",
@@ -745,6 +818,44 @@ fn print_rolled_back_artifact(artifact: &RolledBackArtifact) {
         "                 receipt    {}",
         artifact.receipt_path.display()
     );
+}
+
+fn print_source_build_plan(plan: &SourceBuildPlan) {
+    println!(
+        "profile:  {} / {} / {}",
+        plan.profile.host, plan.profile.persistence, plan.profile.role
+    );
+    println!(
+        "platform: {} / {}",
+        plan.platform.os, plan.platform.architecture
+    );
+    println!("lock:     observed {}", plan.lock_observed_at);
+    println!("mode:     read-only; no source was extracted and Cargo was not invoked");
+    for item in &plan.items {
+        print_source_build_item(item);
+    }
+    println!("execution: disabled; source preparation and builds remain separate phases");
+}
+
+fn print_source_build_item(item: &SourceBuildItem) {
+    println!(
+        "[{:<13}] {:<12} {}",
+        item.status, item.id, item.target_version
+    );
+    println!("                object   {}", item.object_path.display());
+    println!("                archive  {}", item.artifact_sha256);
+    println!("                root     {}", item.source_root);
+    println!("                manifest {}", item.manifest_sha256);
+    println!("                lock     {}", item.cargo_lock_sha256);
+    if item.status == SourceBuildStatus::GraphLocked {
+        println!(
+            "                graph    {} packages ({} registry checksums, {} local root)",
+            item.package_count,
+            item.registry_package_count.unwrap_or_default(),
+            item.local_package_count.unwrap_or_default()
+        );
+    }
+    println!("                detail   {}", item.detail);
 }
 
 fn print_generated_dotter_profile(generated: &GeneratedDotterProfile) {
@@ -1130,6 +1241,37 @@ mod tests {
         assert_eq!(args.persistence, Persistence::Local);
         assert_eq!(args.role, Role::Development);
         assert!(args.json);
+    }
+
+    #[test]
+    fn parses_an_explicit_read_only_source_build_plan() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "build-plan",
+            "--tool",
+            "alacritty",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("source build plan arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::BuildPlan(args),
+        }) = cli.command
+        else {
+            panic!("expected source build plan command");
+        };
+
+        assert_eq!(args.tool, ["alacritty"]);
+        assert!(!args.all);
+        assert_eq!(args.profile.host, HostKind::Desktop);
+        assert!(args.profile.json);
     }
 
     #[test]

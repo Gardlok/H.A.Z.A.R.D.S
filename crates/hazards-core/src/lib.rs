@@ -10,6 +10,7 @@ pub mod paths;
 pub mod probe;
 pub mod profile;
 pub mod provision;
+pub mod source_build;
 
 pub use acquire::{
     AcquisitionOutcome, AcquisitionReceipt, ArtifactAcquirer, ArtifactPayload, ArtifactSource,
@@ -38,3 +39,4 @@ pub use profile::{HostKind, Persistence, ResolvedProfile, Role};
 pub use provision::{
     Platform, ProvisionItem, ProvisionKind, ProvisionPlan, ProvisionPlanner, ProvisionStatus,
 };
+pub use source_build::{SourceBuildItem, SourceBuildPlan, SourceBuildPlanner, SourceBuildStatus};

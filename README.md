@@ -63,6 +63,11 @@ $ cargo run -p hazards-cli -- provision acquire-plan \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- provision build-plan \
+    --tool alacritty \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- provision acquire \
     --tool zellij \
     --host desktop \
@@ -142,6 +147,24 @@ Acquisition is not installation. The command does not unpack an archive, build
 a crate, set an executable bit, run a subprocess, modify `PATH`, or write into
 `~/.local/bin`. It has merely admitted some bytes into quarantine after checking
 their paperwork.
+
+`hazards provision build-plan` handles the source case without pretending that
+`cargo install` is a provenance policy. For each explicitly selected crates.io
+artifact, it rehashes the cached outer archive, safely walks its TAR/GZip
+entries without extracting them, and requires the embedded `Cargo.toml` and
+`Cargo.lock` to match separately pinned SHA-256 identities. The manifest must
+name the locked package and version. The lock must contain exactly the recorded
+number of packages, one local root, and only crates.io registry dependencies
+with complete 64-character checksums. Git dependencies, additional path
+packages, links, special entries, traversal, duplicates, and bounded-expansion
+violations are blocked.
+
+The result `graph_locked` means the upstream transitive Cargo graph has exact
+versions and registry checksums. It does not mean the compiler, native
+libraries, build scripts, or resulting executable are reproducible or trusted.
+The command never extracts source, contacts Cargo, invokes a build script,
+compiles code, or installs anything. A missing cache is reported as
+`cache_missing` so acquisition remains its own explicit boundary.
 
 `hazards provision materialize` is the next deliberately narrow mutation. It
 requires the same explicit selection, rehashes the locked cache object, and
@@ -289,6 +312,7 @@ moustache.
 - [Transactional user installation decision](docs/adr/0007-transactional-user-installation.md)
 - [Verified Dotter preview decision](docs/adr/0008-verified-dotter-preview.md)
 - [Transactional Dotter deployment decision](docs/adr/0009-transactional-dotter-deployment.md)
+- [Transitive source-build planning decision](docs/adr/0010-transitive-source-build-plan.md)
 
 ## Status
 
@@ -299,5 +323,7 @@ functional. Transactional installation and rollback of locked prebuilt
 applications, profile-aware Dotter generation, and verified deployment dry-runs
 are also functional. Read-only adoption planning, confirmed transactional
 Dotter deployment, automatic recovery, and explicit rollback are functional.
-SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal interface
-follow in later phases.
+Read-only inspection of checksum-locked Cargo dependency graphs is functional;
+source extraction, dependency retrieval, compilation, and activation remain
+future boundaries. SurrealDB runtime wiring, Zellij automation, and the Ratatui
+Arsenal interface follow in later phases.
