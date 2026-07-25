@@ -113,7 +113,7 @@ fn read_probe_output(stdout: &Path, stderr: &Path) -> Result<String, String> {
 }
 
 fn read_bounded(path: &Path, maximum: u64) -> io::Result<Vec<u8>> {
-    let mut file = File::open(path)?;
+    let file = File::open(path)?;
     let mut bytes = Vec::new();
     file.take(maximum + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > maximum {
@@ -211,7 +211,12 @@ pub(super) fn safe_target(value: &str) -> bool {
 }
 
 pub(super) fn safe_command(value: &str) -> bool {
-    safe_component(value)
+    !value.is_empty()
+        && value != "."
+        && value != ".."
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'))
 }
 
 pub(super) fn safe_module(value: &str) -> bool {

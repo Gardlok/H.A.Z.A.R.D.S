@@ -8,11 +8,15 @@ use super::probe_support::inspect_environment;
 use super::util::version_at_least;
 use super::*;
 
+type ProbeKey = (PathBuf, Vec<String>);
+type ProbeOutput = Result<String, String>;
+type ProbeOutputs = BTreeMap<ProbeKey, ProbeOutput>;
+
 #[derive(Default)]
 struct FakeProbe {
     variables: BTreeMap<String, String>,
     paths: BTreeMap<String, PathBuf>,
-    outputs: Mutex<BTreeMap<(PathBuf, Vec<String>), Result<String, String>>>,
+    outputs: Mutex<ProbeOutputs>,
 }
 
 impl BuildEnvironmentProbe for FakeProbe {
