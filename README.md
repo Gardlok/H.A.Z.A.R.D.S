@@ -78,6 +78,16 @@ $ cargo run -p hazards-cli --bin hazards-source-prepare -- \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli --bin hazards-cargo-dependencies -- \
+    --tool alacritty \
+    --host desktop \
+    --persistence local \
+    --role development
+$ cargo run -p hazards-cli --bin hazards-build-contract -- \
+    --tool alacritty \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- provision materialize \
     --tool zellij \
     --host desktop \
@@ -191,6 +201,32 @@ Source preparation performs no network request, Cargo invocation, dependency
 download, build-script execution, compilation, executable permission change,
 installation, activation, or `PATH` mutation. The result is inert reviewed input
 for a later build authority—not a cunningly renamed `cargo install`.
+
+`hazards-cargo-dependencies` consumes that prepared source lock and retrieves every
+exact crates.io archive named by `Cargo.lock`. Each dependency is accepted only when
+its calculated SHA-256 matches the lockfile checksum, then stored inert by digest
+beneath `~/.cache/hazards/cargo/objects/sha256`. A deterministic complete-graph
+manifest and append-only receipts preserve what was admitted. Existing objects are
+rehashed, and corrupt bytes are rejected without being quietly replaced.
+
+Dependency caching performs network retrieval but no Cargo invocation, extraction,
+build-script execution, compilation, linking, installation, activation, or `PATH`
+mutation. Once the graph is complete, later build work can operate offline instead of
+asking Cargo to improvise a supply-chain policy during compilation.
+
+`hazards-build-contract` is the final read-only gate before source-build execution.
+It revalidates the prepared source and all dependency objects, then binds them to a
+version-controlled contract for one exact Rust and Cargo release, their own commit
+identities, LLVM major, target triple, reviewed native commands, pkg-config modules,
+and build-affecting environment policy. The real toolchain executables are resolved
+beneath the observed sysroot rather than retaining moving rustup proxy paths.
+
+Probe commands use direct argument vectors, ten-second timeouts, one-MiB output
+bounds, and no shell. Environment values are redacted. Only `contract_ready` emits a
+deterministic SHA-256 binding the verified inputs, exact toolchain, native evidence,
+controlled environment, and a future offline Cargo invocation template. The template
+is evidence only: Cargo, build scripts, compilers, linkers, installers, and activation
+remain disabled.
 
 `hazards provision materialize` is the next deliberately narrow mutation. It
 requires the same explicit selection, rehashes the locked cache object, and
