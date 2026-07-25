@@ -1,6 +1,5 @@
 use std::{
-    fs,
-    io,
+    fs, io,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::{SystemTime, UNIX_EPOCH},
@@ -27,8 +26,7 @@ use evidence::{
 use crate::{
     AcquisitionItem, AcquisitionStatus, HazardsPaths,
     acquire::{
-        ensure_private_dir, ensure_private_subdirectories, validate_component,
-        verify_cached_object,
+        ensure_private_dir, ensure_private_subdirectories, validate_component, verify_cached_object,
     },
 };
 
@@ -159,13 +157,8 @@ impl SourcePreparer {
             &["sources", "sha256", &artifact.sha256[..2]],
         )?;
         let staging_path = staging_parent.join(&artifact.sha256);
-        let (candidate, manifest) = reproduce(
-            item,
-            artifact,
-            source_lock,
-            &object_path,
-            &staging_parent,
-        )?;
+        let (candidate, manifest) =
+            reproduce(item, artifact, source_lock, &object_path, &staging_parent)?;
 
         let outcome = match fs::symlink_metadata(&staging_path) {
             Ok(_) => {
