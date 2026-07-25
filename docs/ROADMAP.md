@@ -25,7 +25,11 @@
 - [x] Safe archive materialization and payload identity checks
 - [x] Transactional user-local installation, PATH verification, and rollback
 - [x] Read-only transitive Cargo source-build lock inspection
-- [ ] Signed provenance and controlled source-build execution
+- [x] Private verified source preparation and append-only receipts
+- [ ] Offline checksum-verified Cargo dependency cache
+- [ ] Pinned Rust toolchain and native build contract
+- [ ] Controlled source-build execution and result verification
+- [ ] Signed provenance policy
 - [ ] Binary release bootstrap and rollback
 
 ## Phase 3 — State and recipes

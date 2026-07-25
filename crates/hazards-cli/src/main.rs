@@ -7,9 +7,10 @@ use hazards_core::{
     CheckStatus, Doctor, DotfileDeploymentOutcome, DotfileDeploymentPlan, DotfileDeploymentReport,
     DotfileRollbackReport, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
     GeneratedDotterProfile, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
-    Persistence, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus, ResolvedProfile,
-    Role, RolledBackArtifact, SourceBuildItem, SourceBuildPlan, SourceBuildPlanner,
-    SourceBuildStatus, StagedArtifact, SystemDotterRunner, VerifiedArtifact,
+    Persistence, PreparedSource, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus,
+    ResolvedProfile, Role, RolledBackArtifact, SourceBuildItem, SourceBuildPlan,
+    SourceBuildPlanner, SourceBuildStatus, SourcePreparer, StagedArtifact, SystemDotterRunner,
+    VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -97,6 +98,8 @@ enum ProvisionCommand {
     BuildPlan(AcquireArgs),
     /// Download and verify locked artifacts into the private HAZARDS cache.
     Acquire(AcquireArgs),
+    /// Reproduce locked crate sources in private, non-executable staging.
+    PrepareSource(AcquireArgs),
     /// Safely reproduce verified artifacts in private, non-executable staging.
     Materialize(AcquireArgs),
     /// Transactionally activate staged payloads in the user-local bin directory.
@@ -144,7 +147,7 @@ struct AcquireArgs {
     /// Select one tool by registry identifier; repeat for multiple tools.
     #[arg(long, value_name = "ID", action = clap::ArgAction::Append)]
     tool: Vec<String>,
-    /// Select every actionable artifact in the resolved profile.
+    /// Select every artifact applicable to this operation and resolved profile.
     #[arg(long, conflicts_with = "tool")]
     all: bool,
 }
@@ -520,6 +523,38 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 println!("mode: verified cache only; nothing was extracted or installed");
             }
         }
+        ProvisionCommand::PrepareSource(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args.profile);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let acquisition = AcquisitionPlanner::new(&lock, &provision).plan();
+            let selected = select_source_items(&lock, &provision, &acquisition, &args)?;
+            let paths = HazardsPaths::from_env()?;
+            let preparer = SourcePreparer::for_paths(&paths);
+            let mut prepared = Vec::with_capacity(selected.len());
+
+            for item in &selected {
+                eprintln!(
+                    "preparing {} {} from its verified locked source...",
+                    item.id, item.target_version
+                );
+                prepared.push(preparer.prepare(item)?);
+            }
+
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&prepared)?);
+            } else if prepared.is_empty() {
+                println!("no locked source artifacts matched the resolved profile");
+            } else {
+                for source in &prepared {
+                    print_prepared_source(source);
+                }
+                println!(
+                    "mode: private non-executable source staging; Cargo, build scripts, and compilers were not invoked"
+                );
+            }
+        }
         ProvisionCommand::Materialize(args) => {
             let registry = Registry::embedded()?;
             let lock = AcquisitionLock::embedded(&registry)?;
@@ -772,6 +807,23 @@ fn print_staged_artifact(artifact: &StagedArtifact) {
         "               receipt  {}",
         artifact.receipt_path.display()
     );
+}
+
+fn print_prepared_source(source: &PreparedSource) {
+    println!(
+        "[{:<12}] {:<12} {}",
+        source.receipt.outcome, source.receipt.tool_id, source.receipt.artifact_sha256
+    );
+    println!("               stage    {}", source.staging_path.display());
+    println!("               source   {}", source.source_path.display());
+    println!(
+        "               graph    {} packages ({} registry checksums, {} local root)",
+        source.receipt.package_count,
+        source.receipt.registry_package_count,
+        source.receipt.local_package_count
+    );
+    println!("               manifest {}", source.manifest_path.display());
+    println!("               receipt  {}", source.receipt_path.display());
 }
 
 fn print_installed_artifact(artifact: &InstalledArtifact) {
@@ -1358,6 +1410,36 @@ mod tests {
         };
 
         assert_eq!(args.tool, ["dotter"]);
+        assert!(!args.all);
+        assert!(args.profile.json);
+    }
+
+    #[test]
+    fn parses_an_explicit_source_preparation() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "prepare-source",
+            "--tool",
+            "alacritty",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("source preparation arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::PrepareSource(args),
+        }) = cli.command
+        else {
+            panic!("expected source preparation command");
+        };
+
+        assert_eq!(args.tool, ["alacritty"]);
         assert!(!args.all);
         assert!(args.profile.json);
     }

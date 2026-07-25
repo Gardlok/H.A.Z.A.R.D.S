@@ -134,6 +134,46 @@ preparation, dependency acquisition, build-script execution, compilation,
 result identity, and transactional activation remain separate future
 boundaries.
 
+## Verified source preparation
+
+`hazards provision prepare-source` converts an explicitly selected,
+graph-locked crates.io object into inert private source staging. Its authority
+stops at:
+
+- content-addressed trees under
+  `$XDG_CACHE_HOME/hazards/sources/sha256/<prefix>/<artifact-digest>`;
+- append-only JSON receipts under
+  `$XDG_STATE_HOME/hazards/receipts/source-preparations/<tool>/<version>`.
+
+Before creating staging state, the command revalidates the cached object's
+type, byte count, SHA-256 digest, archive shape, pinned manifest and lockfile,
+package identity, registry sources, dependency checksums, and graph counts.
+Extraction then hashes the exact compressed stream it consumes, so the
+prepared tree remains bound to the outer acquisition identity even if the
+cache path changes between earlier observations.
+
+Only bounded regular files and directories beneath the exact locked source
+root are accepted. Absolute paths, parent components, backslashes, links,
+special entries, duplicate paths, excessive entry sizes, and excessive
+aggregate expansion fail closed. Archived ownership, permissions, and
+timestamps are discarded. Directories are `0700`; files are `0600` and
+therefore non-executable.
+
+A deterministic manifest binds the acquisition digest, Cargo identities,
+dependency counts, and every staged file's relative path, size, and SHA-256.
+Persistence is an atomic rename from a private sibling candidate. Existing
+staging is never trusted by its content-addressed name: HAZARDS reproduces a
+fresh candidate from the verified object and requires the complete manifests
+and actual tree to match before reporting `stage_hit`. Changed or malformed
+staging is preserved as evidence and rejected rather than silently repaired.
+
+This phase performs no network request, Cargo invocation, dependency
+retrieval, build-script execution, compiler or linker execution, executable
+permission change, application-store write, activation, or `PATH` mutation.
+The resulting source is inert build input. Dependency acquisition, toolchain
+identity, native libraries, build sandboxing, output identity, installation,
+and rollback remain separate authorization boundaries.
+
 ## Safe materialization
 
 `hazards provision materialize` converts an actionable, verified cache object

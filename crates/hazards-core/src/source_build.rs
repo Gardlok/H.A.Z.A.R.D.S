@@ -242,12 +242,12 @@ fn cache_object_path(cache_root: &Path, sha256: &str) -> PathBuf {
         .join(sha256)
 }
 
-struct SourceInspection {
-    registry_packages: usize,
-    local_packages: usize,
+pub(crate) struct SourceInspection {
+    pub(crate) registry_packages: usize,
+    pub(crate) local_packages: usize,
 }
 
-fn inspect_source_archive(
+pub(crate) fn inspect_source_archive(
     path: &Path,
     artifact: &LockedArtifact,
     source_lock: &CargoSourceLock,

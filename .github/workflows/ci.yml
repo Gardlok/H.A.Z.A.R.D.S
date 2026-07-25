@@ -32,6 +32,7 @@ jobs:
           cargo run -p hazards-cli -- provision acquire-plan --host remote --persistence ghost --role operations --json
           cargo run -p hazards-cli -- provision build-plan --tool alacritty --host desktop --persistence local --role development --json
           cargo run -p hazards-cli -- provision acquire --help
+          cargo run -p hazards-cli -- provision prepare-source --help
           cargo run -p hazards-cli -- provision materialize --help
           cargo run -p hazards-cli -- provision install --help
           cargo run -p hazards-cli -- provision rollback --help
