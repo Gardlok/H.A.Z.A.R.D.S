@@ -2,6 +2,7 @@
 
 pub mod acquire;
 pub mod acquisition;
+pub mod build_contract;
 pub mod cargo_dependency;
 pub mod doctor;
 pub mod dotfiles;
@@ -19,11 +20,18 @@ pub use acquire::{
     HttpArtifactSource, VerifiedArtifact, VerifiedArtifactError,
 };
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
+pub use build_contract::{
+    BuildCommandEvidence, BuildCommandSpec, BuildContractError, BuildContractItem, BuildContractLock,
+    BuildContractPlan, BuildContractPlanner, BuildContractSpec, BuildContractStatus,
+    BuildDependencyEvidence, BuildEnvironmentEvidence, BuildEnvironmentProbe, BuildEnvironmentSpec,
+    BuildInvocationTemplate, BuildSourceEvidence, PkgConfigEvidence, PkgConfigSpec,
+    RustToolchainEvidence, SystemBuildEnvironmentProbe,
+};
 pub use cargo_dependency::{
     CachedCargoDependencies, CachedCargoDependency, CargoDependencyAcquirer,
     CargoDependencyCacheOutcome, CargoDependencyError, CargoDependencyOutcome,
     CargoDependencyPayload, CargoDependencyReceipt, CargoDependencySource, CargoDependencySpec,
-    HttpCargoDependencySource,
+    HttpCargoDependencySource, VerifiedCargoDependencies,
 };
 pub use doctor::{Check, CheckStatus, Doctor};
 pub use dotfiles::{
@@ -50,5 +58,5 @@ pub use provision::{
 pub use source_build::{SourceBuildItem, SourceBuildPlan, SourceBuildPlanner, SourceBuildStatus};
 pub use source_prepare::{
     PreparedSource, SourcePreparationError, SourcePreparationOutcome, SourcePreparationReceipt,
-    SourcePreparer,
+    SourcePreparer, VerifiedPreparedSource,
 };
