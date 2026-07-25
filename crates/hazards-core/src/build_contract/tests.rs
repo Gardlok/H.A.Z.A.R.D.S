@@ -49,10 +49,15 @@ fn embedded_contract_lock_is_valid() {
 
 #[test]
 fn duplicate_contract_targets_are_rejected() {
-    let source = EMBEDDED_BUILD_CONTRACTS.replace(
-        "architecture = \"aarch64\"",
-        "architecture = \"x86_64\"",
-    );
+    let source = EMBEDDED_BUILD_CONTRACTS
+        .replace(
+            "architecture = \"aarch64\"",
+            "architecture = \"x86_64\"",
+        )
+        .replace(
+            "target = \"aarch64-unknown-linux-gnu\"",
+            "target = \"x86_64-unknown-linux-gnu\"",
+        );
     let error = BuildContractLock::parse(&source).expect_err("duplicate should fail");
     assert!(error.to_string().contains("duplicate build contract"));
 }
@@ -94,7 +99,7 @@ fn malformed_command_names_are_rejected() {
 #[test]
 fn blocked_environment_variables_must_be_cleared_for_execution() {
     let source = EMBEDDED_BUILD_CONTRACTS.replacen(
-        "clear_for_build = [\"RUSTFLAGS\"",
+        "clear_for_build = [\"RUSTFLAGS\", \"RUSTDOCFLAGS\"",
         "clear_for_build = [\"RUSTDOCFLAGS\"",
         1,
     );
