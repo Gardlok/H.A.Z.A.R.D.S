@@ -48,6 +48,15 @@ Existing objects are rehashed before use. A corrupt object is preserved and
 rejected; HAZARDS does not quietly replace inconvenient evidence. Existing
 graph manifests must exactly equal a freshly reconstructed manifest.
 
+## Acceptance evidence
+
+The Alacritty 0.17.0 graph was exercised in an isolated XDG environment. The
+first pass downloaded and verified all 291 registry archives. Every cache
+directory was mode `0700`, every object and graph manifest was mode `0600`, and
+no symbolic links were present. A second pass reported 291 cache hits and zero
+downloads. One cached archive was then deliberately overwritten; the next pass
+failed closed and left the altered bytes in place as evidence.
+
 This boundary performs network retrieval, but it does not invoke Cargo,
 extract an archive, run a build script, compile or link code, grant executable
 permissions, install an application, activate a command, or modify `PATH`.
