@@ -117,19 +117,19 @@ fn select_source_items(
         let mut seen = HashSet::new();
         let mut selected = Vec::with_capacity(args.tool.len());
         for id in &args.tool {
-            if !seen.insert(id) {
+            if !seen.insert(id.as_str()) {
                 return Err(cli_error(format!("tool {id} was selected more than once")));
             }
             let item = acquisition
                 .items
                 .iter()
-                .find(|item| &item.id == id)
+                .find(|item| item.id == id.as_str())
                 .cloned()
                 .or_else(|| {
                     provision
                         .items
                         .iter()
-                        .find(|item| &item.id == id)
+                        .find(|item| item.id == id.as_str())
                         .and_then(|item| planner.resolve(item))
                 })
                 .ok_or_else(|| {
