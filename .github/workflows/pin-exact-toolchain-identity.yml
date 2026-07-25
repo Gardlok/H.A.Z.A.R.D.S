@@ -1,0 +1,100 @@
+name: Pin exact toolchain identity
+
+on:
+  push:
+    branches:
+      - agent/pinned-build-contract
+
+permissions:
+  contents: write
+
+jobs:
+  pin:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pinned-build-contract
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Pin probed Cargo and LLVM identities
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          lock = Path('ingredients/arsenallspice/build-contracts.toml')
+          text = lock.read_text()
+          text = text.replace(
+              'cargo_release = "1.97.1"\nllvm_major = 21',
+              'cargo_release = "1.97.1"\ncargo_commit_hash = "c980f4866141969fab6254a680546a277789d6f0"\ncargo_commit_date = "2026-06-30"\nllvm_major = 22',
+          )
+          if text.count('cargo_commit_hash = ') != 2:
+              raise SystemExit('did not update both contracts')
+          lock.write_text(text)
+
+          model = Path('crates/hazards-core/src/build_contract.rs')
+          text = model.read_text().replace(
+              '    pub cargo_release: String,\n    pub llvm_major: u32,',
+              '    pub cargo_release: String,\n    pub cargo_commit_hash: String,\n    pub cargo_commit_date: String,\n    pub llvm_major: u32,',
+          )
+          model.write_text(text)
+
+          planner = Path('crates/hazards-core/src/build_contract/planner.rs')
+          text = planner.read_text().replace(
+              '''                || !valid_lower_hex(&contract.rustc_commit_hash, 40)
+                              || !valid_date(&contract.rustc_commit_date)
+                              || contract.llvm_major == 0
+              ''',
+              '''                || !valid_lower_hex(&contract.rustc_commit_hash, 40)
+                              || !valid_date(&contract.rustc_commit_date)
+                              || !valid_lower_hex(&contract.cargo_commit_hash, 40)
+                              || !valid_date(&contract.cargo_commit_date)
+                              || contract.llvm_major == 0
+              ''',
+          )
+          planner.write_text(text)
+
+          probes = Path('crates/hazards-core/src/build_contract/probe_support.rs')
+          text = probes.read_text().replace(
+              '''        || cargo_commit_hash
+                          .as_deref()
+                          .is_some_and(|value| value != contract.rustc_commit_hash)
+                      || cargo_commit_date
+                          .as_deref()
+                          .is_some_and(|value| value != contract.rustc_commit_date)
+              ''',
+              '''        || cargo_commit_hash.as_deref() != Some(contract.cargo_commit_hash.as_str())
+                      || cargo_commit_date.as_deref() != Some(contract.cargo_commit_date.as_str())
+              ''',
+          )
+          text = text.replace(
+              '"toolchain identity mismatch: rustc {rustc_release} {rustc_commit_hash} {rustc_commit_date}, cargo {cargo_release}, host {host}, LLVM {llvm_version}"',
+              '"toolchain identity mismatch: rustc {rustc_release} {rustc_commit_hash} {rustc_commit_date}, cargo {cargo_release} {} {}, host {host}, LLVM {llvm_version}", cargo_commit_hash.as_deref().unwrap_or("missing"), cargo_commit_date.as_deref().unwrap_or("missing")',
+          )
+          probes.write_text(text)
+
+          guide = Path('docs/BUILD_CONTRACT.md')
+          text = guide.read_text().replace(
+              '- LLVM major version 21;',
+              '- Cargo commit `c980f4866141969fab6254a680546a277789d6f0` dated `2026-06-30`;\n- LLVM major version 22;',
+          )
+          guide.write_text(text)
+
+          identity = Path('.hazards-pinned-toolchain-identity.txt')
+          if identity.exists():
+              identity.unlink()
+          PY
+          cargo fmt --all
+          cargo check --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+      - name: Commit exact identity and remove workflow
+        run: |
+          rm -- .github/workflows/pin-exact-toolchain-identity.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'Pin exact Rust and Cargo toolchain identity'
+          git push origin HEAD:agent/pinned-build-contract
