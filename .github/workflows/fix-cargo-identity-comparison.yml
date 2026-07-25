@@ -1,0 +1,53 @@
+name: Fix Cargo identity comparison
+
+on:
+  push:
+    branches:
+      - agent/pinned-build-contract
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pinned-build-contract
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - name: Compare Cargo to its own pinned identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/hazards-core/src/build_contract/probe_support.rs')
+          text = path.read_text()
+          old = '''        || cargo_commit_hash
+                      .as_deref()
+                      .is_some_and(|value| value != contract.rustc_commit_hash)
+                  || cargo_commit_date
+                      .as_deref()
+                      .is_some_and(|value| value != contract.rustc_commit_date)
+          '''
+          new = '''        || cargo_commit_hash.as_deref() != Some(contract.cargo_commit_hash.as_str())
+                  || cargo_commit_date.as_deref() != Some(contract.cargo_commit_date.as_str())
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('stale Cargo identity predicate not found exactly once')
+          path.write_text(text.replace(old, new))
+          PY
+          cargo fmt --all
+          cargo check --workspace
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+      - name: Commit fix and remove workflow
+        run: |
+          rm -- .github/workflows/fix-cargo-identity-comparison.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'Compare Cargo against its pinned identity'
+          git push origin HEAD:agent/pinned-build-contract
