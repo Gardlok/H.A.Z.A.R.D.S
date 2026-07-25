@@ -1,12 +1,29 @@
 use std::{fs, io, path::Path};
 
-use crate::{CargoDependencyAcquirer, SourcePreparer};
+use crate::{
+    CargoDependencyAcquirer, CargoDependencyError, CargoDependencyPayload, CargoDependencySource,
+    CargoDependencySpec, SourcePreparer,
+};
 
+use super::util::{hash_bytes, valid_release};
 use super::{
     AcquisitionItem, BuildContractError, BuildDependencyEvidence, BuildSourceEvidence, HazardsPaths,
     MAX_EVIDENCE_SIZE,
 };
-use super::util::{hash_bytes, valid_release};
+
+#[derive(Debug, Clone, Copy)]
+struct VerificationOnlySource;
+
+impl CargoDependencySource for VerificationOnlySource {
+    fn open(
+        &self,
+        _dependency: &CargoDependencySpec,
+    ) -> Result<CargoDependencyPayload, CargoDependencyError> {
+        Err(CargoDependencyError::Validation(
+            "network access is disabled during build-contract verification".to_owned(),
+        ))
+    }
+}
 
 pub(super) fn verify_source_evidence(
     paths: &HazardsPaths,
@@ -63,7 +80,8 @@ pub(super) fn verify_source_evidence(
             reason: "Cargo.toml has no package table".to_owned(),
         })?;
     if package.get("name").and_then(toml::Value::as_str) != Some(source_lock.package.as_str())
-        || package.get("version").and_then(toml::Value::as_str) != Some(item.target_version.as_str())
+        || package.get("version").and_then(toml::Value::as_str)
+            != Some(item.target_version.as_str())
     {
         return Err(BuildContractError::CorruptEvidence {
             path: verified.cargo_manifest_path,
@@ -115,18 +133,22 @@ pub(super) fn verify_dependency_evidence(
         .join("cargo")
         .join("dependency-graphs")
         .join("sha256")
-        .join(source_lock.cargo_lock_sha256.get(..2).unwrap_or("invalid"))
+        .join(
+            source_lock
+                .cargo_lock_sha256
+                .get(..2)
+                .unwrap_or("invalid"),
+        )
         .join(format!("{}.json", source_lock.cargo_lock_sha256));
     if missing(&manifest_path)? {
         return Err(BuildContractError::MissingDependencyEvidence(manifest_path));
     }
 
-    let verifier = CargoDependencyAcquirer::for_paths(paths).map_err(|error| {
-        BuildContractError::CorruptEvidence {
-            path: manifest_path.clone(),
-            reason: format!("could not initialize dependency verifier: {error}"),
-        }
-    })?;
+    let verifier = CargoDependencyAcquirer::new(
+        VerificationOnlySource,
+        paths.cache.clone(),
+        paths.state.clone(),
+    );
     let verified = verifier
         .verify_existing(item)
         .map_err(|error| BuildContractError::CorruptEvidence {
