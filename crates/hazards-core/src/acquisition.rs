@@ -88,7 +88,7 @@ impl<'a> AcquisitionPlanner<'a> {
             ),
             Some(AcquisitionMethod::CargoRegistry) => (
                 AcquisitionStatus::LockedSource,
-                "source archive and registry checksum are locked; build prerequisites are not evaluated"
+                "source archive and embedded Cargo graph identities are locked; build prerequisites are not evaluated"
                     .to_owned(),
             ),
             None => (

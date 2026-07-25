@@ -24,7 +24,8 @@
 - [x] Verified content-addressed acquisition cache and receipts
 - [x] Safe archive materialization and payload identity checks
 - [x] Transactional user-local installation, PATH verification, and rollback
-- [ ] Signed provenance and transitive source-build locks
+- [x] Read-only transitive Cargo source-build lock inspection
+- [ ] Signed provenance and controlled source-build execution
 - [ ] Binary release bootstrap and rollback
 
 ## Phase 3 — State and recipes

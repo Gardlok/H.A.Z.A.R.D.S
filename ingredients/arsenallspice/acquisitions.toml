@@ -1,5 +1,5 @@
-schema_version = 2
-observed_at = "2026-07-24"
+schema_version = 3
+observed_at = "2026-07-25"
 
 [[artifacts]]
 tool_id = "alacritty"
@@ -13,6 +13,14 @@ size = 1190729
 sha256 = "7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd"
 url = "https://crates.io/api/v1/crates/alacritty/0.17.0/download"
 evidence = "crates_io_checksum"
+
+[artifacts.source_lock]
+root = "alacritty-0.17.0"
+package = "alacritty"
+manifest_sha256 = "f79a4005a961a2fc67235b5c4aaa6624d5ca7f16337c6b557266d8dd66975da1"
+cargo_lock_sha256 = "a1bd06c9f0bda95630b1ea5ca8dd1478d0de8599b114572846afcda87d4c2861"
+cargo_lock_version = 4
+package_count = 292
 
 [[artifacts]]
 tool_id = "atuin"
@@ -346,6 +354,14 @@ size = 62763
 sha256 = "e4de7875c0c312f30e090edb0da5df9f6586033132d36d94c8f9133e82826797"
 url = "https://crates.io/api/v1/crates/tokei/14.0.0/download"
 evidence = "crates_io_checksum"
+
+[artifacts.source_lock]
+root = "tokei-14.0.0"
+package = "tokei"
+manifest_sha256 = "af551541be6871cbb6aa74608401cf2a629e1c2d2956a059e4143f2743e50ad0"
+cargo_lock_sha256 = "8ab3b2817d708a741d2d05ea7572aed91d449daa5c1c376114093fd846a8ef05"
+cargo_lock_version = 3
+package_count = 205
 
 [[artifacts]]
 tool_id = "zellij"

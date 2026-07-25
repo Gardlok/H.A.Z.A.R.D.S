@@ -103,6 +103,37 @@ can execute on the host. Multi-tool acquisition is not transactional: each
 successfully verified content-addressed object remains useful if a later
 network request fails.
 
+## Transitive source-build planning
+
+Upstream does not publish suitable Linux binaries for every selected tool.
+Alacritty and Tokei therefore enter the acquisition lock as
+architecture-neutral crates.io archives. Their top-level registry checksums
+identify the outer archives, but a future build also needs an explicit
+dependency-graph boundary.
+
+Acquisition-lock schema 3 records the expected source root, package name,
+published `Cargo.toml` digest, published `Cargo.lock` digest, lockfile version,
+and exact package count for every source artifact. `hazards provision
+build-plan` is a read-only inspection of those identities. It first revalidates
+the cached outer object, then walks its compressed TAR stream without extracting
+anything. Path, type, entry-count, per-entry size, and aggregate expansion
+restrictions are enforced.
+
+The embedded manifest must name the selected package and target version. The
+embedded lock must contain exactly one source-less root package and only
+crates.io registry dependencies with valid SHA-256 checksums. Git dependencies,
+additional path packages, alternate registries, missing checksums, graph-count
+drift, links, special entries, duplicate paths, and traversal fail closed.
+
+`graph_locked` means the upstream Cargo graph has fixed versions and registry
+checksums. It does not authorize execution and does not claim that the Rust
+toolchain, native system libraries, build scripts, or final executable are
+reproducible. This phase creates no directories, extracts no source, performs
+no network request, invokes no subprocess, and writes no receipt. Source
+preparation, dependency acquisition, build-script execution, compilation,
+result identity, and transactional activation remain separate future
+boundaries.
+
 ## Safe materialization
 
 `hazards provision materialize` converts an actionable, verified cache object
@@ -294,7 +325,9 @@ containing unrelated later data blocks the entire rollback.
   rollback refuses ambiguous ownership rather than overwriting later changes.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
-- Source-archive checksums do not lock a transitive Cargo dependency graph.
+- A validated embedded Cargo lock pins crates.io dependency versions and
+  checksums, but does not pin the compiler, linker, native libraries, build
+  scripts' effects, or the resulting binary.
 - Dotfiles never contain secrets.
 - SurrealDB never becomes a credential vault.
 - Remote Zellij control remains bound to the authenticated host session.
