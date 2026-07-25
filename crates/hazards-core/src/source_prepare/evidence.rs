@@ -9,15 +9,17 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
+use super::archive::strict_tree_path;
 use super::{
     MANIFEST_NAME, MANIFEST_SCHEMA_VERSION, MAX_ARCHIVE_ENTRIES, MAX_EVIDENCE_SIZE,
     MAX_EXPANDED_SIZE, PreparedSourceEntry, PreparedSourceEntryKind, SourcePreparationError,
     SourcePreparationManifest, SourcePreparationOutcome, io_error,
 };
-use super::archive::strict_tree_path;
 use crate::acquire::{set_private_file_permissions, sync_directory};
 
-pub(super) fn inspect_tree(root: &Path) -> Result<Vec<PreparedSourceEntry>, SourcePreparationError> {
+pub(super) fn inspect_tree(
+    root: &Path,
+) -> Result<Vec<PreparedSourceEntry>, SourcePreparationError> {
     let metadata = fs::symlink_metadata(root)
         .map_err(|error| io_error("inspect prepared source root", root, error))?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -59,8 +61,8 @@ fn inspect_directory(
     for result in fs::read_dir(directory)
         .map_err(|error| io_error("read prepared source directory", directory, error))?
     {
-        let entry = result
-            .map_err(|error| io_error("read prepared source entry", directory, error))?;
+        let entry =
+            result.map_err(|error| io_error("read prepared source entry", directory, error))?;
         let path = entry.path();
         if path == root.join(MANIFEST_NAME) {
             continue;
@@ -132,8 +134,8 @@ fn verify_mode(
 }
 
 fn hash_file(path: &Path) -> Result<String, SourcePreparationError> {
-    let mut file = File::open(path)
-        .map_err(|error| io_error("open prepared source file", path, error))?;
+    let mut file =
+        File::open(path).map_err(|error| io_error("open prepared source file", path, error))?;
     let mut digest = Sha256::new();
     io::copy(&mut file, &mut digest)
         .map_err(|error| io_error("hash prepared source file", path, error))?;
@@ -170,16 +172,13 @@ pub(super) fn write_json_noclobber(
     temporary
         .write_all(&encoded)
         .map_err(|error| io_error("write source-preparation evidence", temporary.path(), error))?;
-    temporary
-        .as_file_mut()
-        .sync_all()
-        .map_err(|error| {
-            io_error(
-                "synchronize source-preparation evidence",
-                temporary.path(),
-                error,
-            )
-        })?;
+    temporary.as_file_mut().sync_all().map_err(|error| {
+        io_error(
+            "synchronize source-preparation evidence",
+            temporary.path(),
+            error,
+        )
+    })?;
     let file = temporary
         .persist_noclobber(path)
         .map_err(|error| io_error("persist source-preparation evidence", path, error.error))?;

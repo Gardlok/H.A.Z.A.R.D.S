@@ -10,8 +10,8 @@ use flate2::read::GzDecoder;
 
 use super::{
     BUFFER_SIZE, CRATES_IO_REGISTRY, GraphInspection, MAX_ARCHIVE_ENTRIES, MAX_COMPONENT_LENGTH,
-    MAX_ENTRY_SIZE, MAX_EXPANDED_SIZE, MAX_METADATA_SIZE, MAX_PATH_LENGTH,
-    SourcePreparationError, hash_bytes, io_error, valid_sha256,
+    MAX_ENTRY_SIZE, MAX_EXPANDED_SIZE, MAX_METADATA_SIZE, MAX_PATH_LENGTH, SourcePreparationError,
+    hash_bytes, io_error, valid_sha256,
 };
 use crate::acquire::set_private_file_permissions;
 
@@ -32,7 +32,8 @@ pub(super) fn extract_and_validate(
     let mut expanded = 0_u64;
 
     for result in entries {
-        let mut entry = result.map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
+        let mut entry =
+            result.map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
         entry_count = entry_count
             .checked_add(1)
             .ok_or(SourcePreparationError::TooManyEntries {
@@ -239,11 +240,12 @@ fn copy_entry(
                 maximum: declared.min(MAX_ENTRY_SIZE),
             });
         }
-        *expanded = expanded
-            .checked_add(read as u64)
-            .ok_or(SourcePreparationError::ExpandedTooLarge {
-                maximum: MAX_EXPANDED_SIZE,
-            })?;
+        *expanded =
+            expanded
+                .checked_add(read as u64)
+                .ok_or(SourcePreparationError::ExpandedTooLarge {
+                    maximum: MAX_EXPANDED_SIZE,
+                })?;
         if *expanded > MAX_EXPANDED_SIZE {
             return Err(SourcePreparationError::ExpandedTooLarge {
                 maximum: MAX_EXPANDED_SIZE,
@@ -261,10 +263,7 @@ fn copy_entry(
     Ok(())
 }
 
-fn ensure_parent_directories(
-    root: &Path,
-    relative: &Path,
-) -> Result<(), SourcePreparationError> {
+fn ensure_parent_directories(root: &Path, relative: &Path) -> Result<(), SourcePreparationError> {
     if let Some(parent) = relative.parent() {
         if !parent.as_os_str().is_empty() {
             ensure_directory(root, parent)?;
@@ -329,10 +328,7 @@ fn set_directory_mode(path: &Path) -> Result<(), SourcePreparationError> {
     Ok(())
 }
 
-fn read_metadata_file(
-    path: &Path,
-    label: &'static str,
-) -> Result<Vec<u8>, SourcePreparationError> {
+fn read_metadata_file(path: &Path, label: &'static str) -> Result<Vec<u8>, SourcePreparationError> {
     let metadata = fs::symlink_metadata(path).map_err(|error| match error.kind() {
         io::ErrorKind::NotFound => SourcePreparationError::MissingMetadata(label),
         _ => io_error("inspect prepared source metadata", path, error),
@@ -430,9 +426,7 @@ fn validate_cargo_lock(
     let mut local_packages = 0_usize;
     for package in packages {
         let package = package.as_table().ok_or_else(|| {
-            SourcePreparationError::Validation(
-                "Cargo.lock package entry is not a table".to_owned(),
-            )
+            SourcePreparationError::Validation("Cargo.lock package entry is not a table".to_owned())
         })?;
         let name = package
             .get("name")

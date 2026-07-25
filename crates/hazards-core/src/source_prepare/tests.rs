@@ -162,10 +162,7 @@ fn tampered_prepared_source_fails_closed() {
 fn rejects_a_malformed_artifact_digest_before_building_a_cache_path() {
     let lock = cargo_lock(CRATES_IO_REGISTRY);
     let (mut item, _) = fixture(&lock);
-    item.artifact
-        .as_mut()
-        .expect("fixture artifact")
-        .sha256 = "short".to_owned();
+    item.artifact.as_mut().expect("fixture artifact").sha256 = "short".to_owned();
 
     let root = tempfile::tempdir().expect("temporary root");
     let error = SourcePreparer::new(root.path().join("cache"), root.path().join("state"))
@@ -218,8 +215,7 @@ fn rejects_links_and_paths_outside_the_locked_root() {
     persist_object(root.path(), &item, &archive);
 
     assert!(matches!(
-        SourcePreparer::new(root.path().join("cache"), root.path().join("state"))
-            .prepare(&item),
+        SourcePreparer::new(root.path().join("cache"), root.path().join("state")).prepare(&item),
         Err(SourcePreparationError::UnsafeEntry { .. })
     ));
 }
