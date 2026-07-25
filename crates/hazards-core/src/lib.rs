@@ -2,6 +2,7 @@
 
 pub mod acquire;
 pub mod acquisition;
+pub mod cargo_dependency;
 pub mod doctor;
 pub mod dotfiles;
 pub mod install;
@@ -18,6 +19,12 @@ pub use acquire::{
     HttpArtifactSource, VerifiedArtifact, VerifiedArtifactError,
 };
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
+pub use cargo_dependency::{
+    CachedCargoDependencies, CachedCargoDependency, CargoDependencyAcquirer,
+    CargoDependencyCacheOutcome, CargoDependencyError, CargoDependencyOutcome,
+    CargoDependencyPayload, CargoDependencyReceipt, CargoDependencySource, CargoDependencySpec,
+    HttpCargoDependencySource,
+};
 pub use doctor::{Check, CheckStatus, Doctor};
 pub use dotfiles::{
     DotfileAdoptionAction, DotfileAdoptionItem, DotfileDeploymentOutcome, DotfileDeploymentPlan,
