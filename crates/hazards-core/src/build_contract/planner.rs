@@ -12,8 +12,8 @@ use super::util::{
 use super::{
     AcquisitionItem, BuildContractError, BuildContractItem, BuildContractLock, BuildContractPlan,
     BuildContractSpec, BuildContractStatus, BuildEnvironmentEvidence, BuildEnvironmentProbe,
-    BuildEnvironmentSpec, HazardsPaths, Platform, ResolvedProfile, SystemBuildEnvironmentProbe,
-    ToolchainProbeFailure, EMBEDDED_BUILD_CONTRACTS,
+    BuildEnvironmentSpec, EMBEDDED_BUILD_CONTRACTS, HazardsPaths, Platform, ResolvedProfile,
+    SystemBuildEnvironmentProbe, ToolchainProbeFailure,
 };
 
 pub struct BuildContractPlanner<'a, P = SystemBuildEnvironmentProbe> {
@@ -83,7 +83,10 @@ impl<'a, P: BuildEnvironmentProbe> BuildContractPlanner<'a, P> {
         let source = match verify_source_evidence(self.paths, item) {
             Ok(source) => Some(source),
             Err(BuildContractError::MissingSourceEvidence(path)) => {
-                findings.push(format!("prepared source evidence is missing at {}", path.display()));
+                findings.push(format!(
+                    "prepared source evidence is missing at {}",
+                    path.display()
+                ));
                 None
             }
             Err(error) => {
@@ -126,8 +129,14 @@ impl<'a, P: BuildEnvironmentProbe> BuildContractPlanner<'a, P> {
             native_commands.push(probe_command(&self.probe, command));
         }
 
-        let rustc_spec = contract.commands.iter().find(|command| command.id == "rustc");
-        let cargo_spec = contract.commands.iter().find(|command| command.id == "cargo");
+        let rustc_spec = contract
+            .commands
+            .iter()
+            .find(|command| command.id == "rustc");
+        let cargo_spec = contract
+            .commands
+            .iter()
+            .find(|command| command.id == "cargo");
         let toolchain_result = match (rustc_spec, cargo_spec) {
             (Some(rustc), Some(cargo)) => probe_toolchain(&self.probe, contract, rustc, cargo),
             _ => Err(ToolchainProbeFailure::Mismatch(
@@ -168,19 +177,16 @@ impl<'a, P: BuildEnvironmentProbe> BuildContractPlanner<'a, P> {
         }
 
         let invocation = match (&source, &toolchain) {
-            (Some(source), Some(toolchain)) => match invocation_template(
-                self.paths,
-                contract,
-                source,
-                toolchain,
-                &native_commands,
-            ) {
-                Ok(invocation) => Some(invocation),
-                Err(error) => {
-                    findings.push(error);
-                    None
+            (Some(source), Some(toolchain)) => {
+                match invocation_template(self.paths, contract, source, toolchain, &native_commands)
+                {
+                    Ok(invocation) => Some(invocation),
+                    Err(error) => {
+                        findings.push(error);
+                        None
+                    }
                 }
-            },
+            }
             _ => None,
         };
 
@@ -404,7 +410,10 @@ fn validate_contract_commands(contract: &BuildContractSpec) -> Result<(), BuildC
         if !safe_component(&command.id)
             || command.candidates.is_empty()
             || command.args.is_empty()
-            || command.candidates.iter().any(|candidate| !safe_command(candidate))
+            || command
+                .candidates
+                .iter()
+                .any(|candidate| !safe_command(candidate))
             || command.args.iter().any(|argument| argument.contains('\0'))
             || command
                 .minimum_version

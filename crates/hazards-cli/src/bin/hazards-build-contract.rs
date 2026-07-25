@@ -66,18 +66,11 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
     let profile = ResolvedProfile::new(cli.profile.host, cli.profile.persistence, cli.profile.role);
     let provision = ProvisionPlanner::new(&registry, &profile).plan();
     let acquisition = AcquisitionPlanner::new(&acquisition_lock, &provision).plan();
-    let selected = select_source_items(
-        &acquisition_lock,
-        &provision,
-        &acquisition,
-        &cli.selection,
-    )?;
+    let selected =
+        select_source_items(&acquisition_lock, &provision, &acquisition, &cli.selection)?;
     let paths = HazardsPaths::from_env()?;
-    let plan = BuildContractPlanner::for_paths(&paths)?.plan(
-        &profile,
-        &provision.platform,
-        &selected,
-    );
+    let plan =
+        BuildContractPlanner::for_paths(&paths)?.plan(&profile, &provision.platform, &selected);
 
     if cli.profile.json {
         println!("{}", serde_json::to_string_pretty(&plan)?);
@@ -163,7 +156,10 @@ fn print_item(item: &BuildContractItem) {
             "                              rust     {} {}",
             toolchain.rustc_release, toolchain.rustc_commit_hash
         );
-        println!("                              target   {}", toolchain.target);
+        println!(
+            "                              target   {}",
+            toolchain.target
+        );
     }
     if let Some(dependencies) = &item.dependencies {
         println!(
@@ -222,9 +218,8 @@ mod tests {
 
     #[test]
     fn build_contract_rejects_tool_and_all_together() {
-        let error =
-            Cli::try_parse_from(["hazards-build-contract", "--tool", "alacritty", "--all"])
-                .expect_err("conflicting selection should fail");
+        let error = Cli::try_parse_from(["hazards-build-contract", "--tool", "alacritty", "--all"])
+            .expect_err("conflicting selection should fail");
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
 }

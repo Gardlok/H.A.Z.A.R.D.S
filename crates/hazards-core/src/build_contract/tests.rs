@@ -50,10 +50,7 @@ fn embedded_contract_lock_is_valid() {
 #[test]
 fn duplicate_contract_targets_are_rejected() {
     let source = EMBEDDED_BUILD_CONTRACTS
-        .replace(
-            "architecture = \"aarch64\"",
-            "architecture = \"x86_64\"",
-        )
+        .replace("architecture = \"aarch64\"", "architecture = \"x86_64\"")
         .replace(
             "target = \"aarch64-unknown-linux-gnu\"",
             "target = \"x86_64-unknown-linux-gnu\"",
@@ -104,7 +101,9 @@ fn blocked_environment_variables_must_be_cleared_for_execution() {
         1,
     );
     let error = BuildContractLock::parse(&source).expect_err("incomplete clearing should fail");
-    assert!(error
-        .to_string()
-        .contains("every blocked environment variable"));
+    assert!(
+        error
+            .to_string()
+            .contains("every blocked environment variable")
+    );
 }

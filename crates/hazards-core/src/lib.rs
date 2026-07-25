@@ -21,11 +21,11 @@ pub use acquire::{
 };
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
 pub use build_contract::{
-    BuildCommandEvidence, BuildCommandSpec, BuildContractError, BuildContractItem, BuildContractLock,
-    BuildContractPlan, BuildContractPlanner, BuildContractSpec, BuildContractStatus,
-    BuildDependencyEvidence, BuildEnvironmentEvidence, BuildEnvironmentProbe, BuildEnvironmentSpec,
-    BuildInvocationTemplate, BuildSourceEvidence, PkgConfigEvidence, PkgConfigSpec,
-    RustToolchainEvidence, SystemBuildEnvironmentProbe,
+    BuildCommandEvidence, BuildCommandSpec, BuildContractError, BuildContractItem,
+    BuildContractLock, BuildContractPlan, BuildContractPlanner, BuildContractSpec,
+    BuildContractStatus, BuildDependencyEvidence, BuildEnvironmentEvidence, BuildEnvironmentProbe,
+    BuildEnvironmentSpec, BuildInvocationTemplate, BuildSourceEvidence, PkgConfigEvidence,
+    PkgConfigSpec, RustToolchainEvidence, SystemBuildEnvironmentProbe,
 };
 pub use cargo_dependency::{
     CachedCargoDependencies, CachedCargoDependency, CargoDependencyAcquirer,

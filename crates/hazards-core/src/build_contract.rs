@@ -13,9 +13,9 @@ use crate::{AcquisitionItem, HazardsPaths, Platform, ResolvedProfile};
 mod evidence;
 mod planner;
 mod probe_support;
-mod util;
 #[cfg(test)]
 mod tests;
+mod util;
 
 use util::{locate_command, run_bounded};
 
@@ -234,7 +234,9 @@ impl BuildEnvironmentProbe for SystemBuildEnvironmentProbe {
     }
 
     fn locate(&self, candidates: &[String]) -> Option<PathBuf> {
-        candidates.iter().find_map(|candidate| locate_command(candidate))
+        candidates
+            .iter()
+            .find_map(|candidate| locate_command(candidate))
     }
 
     fn run(&self, executable: &Path, arguments: &[String]) -> Result<String, String> {

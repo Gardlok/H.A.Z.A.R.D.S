@@ -7,8 +7,8 @@ use crate::{
 
 use super::util::{hash_bytes, valid_release};
 use super::{
-    AcquisitionItem, BuildContractError, BuildDependencyEvidence, BuildSourceEvidence, HazardsPaths,
-    MAX_EVIDENCE_SIZE,
+    AcquisitionItem, BuildContractError, BuildDependencyEvidence, BuildSourceEvidence,
+    HazardsPaths, MAX_EVIDENCE_SIZE,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -66,12 +66,11 @@ pub(super) fn verify_source_evidence(
             reason: format!("Cargo.toml is not UTF-8: {error}"),
         }
     })?;
-    let manifest: toml::Value = toml::from_str(manifest_source).map_err(|error| {
-        BuildContractError::CorruptEvidence {
+    let manifest: toml::Value =
+        toml::from_str(manifest_source).map_err(|error| BuildContractError::CorruptEvidence {
             path: verified.cargo_manifest_path.clone(),
             reason: format!("Cargo.toml is invalid: {error}"),
-        }
-    })?;
+        })?;
     let package = manifest
         .get("package")
         .and_then(toml::Value::as_table)
@@ -133,12 +132,7 @@ pub(super) fn verify_dependency_evidence(
         .join("cargo")
         .join("dependency-graphs")
         .join("sha256")
-        .join(
-            source_lock
-                .cargo_lock_sha256
-                .get(..2)
-                .unwrap_or("invalid"),
-        )
+        .join(source_lock.cargo_lock_sha256.get(..2).unwrap_or("invalid"))
         .join(format!("{}.json", source_lock.cargo_lock_sha256));
     if missing(&manifest_path)? {
         return Err(BuildContractError::MissingDependencyEvidence(manifest_path));
@@ -149,12 +143,13 @@ pub(super) fn verify_dependency_evidence(
         paths.cache.clone(),
         paths.state.clone(),
     );
-    let verified = verifier
-        .verify_existing(item)
-        .map_err(|error| BuildContractError::CorruptEvidence {
-            path: manifest_path,
-            reason: error.to_string(),
-        })?;
+    let verified =
+        verifier
+            .verify_existing(item)
+            .map_err(|error| BuildContractError::CorruptEvidence {
+                path: manifest_path,
+                reason: error.to_string(),
+            })?;
 
     Ok(BuildDependencyEvidence {
         object_root: verified.object_root,

@@ -90,7 +90,10 @@ pub(super) fn run_bounded(executable: &Path, arguments: &[String]) -> Result<Str
         if started.elapsed() > PROBE_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(format!("probe exceeded {} seconds", PROBE_TIMEOUT.as_secs()));
+            return Err(format!(
+                "probe exceeded {} seconds",
+                PROBE_TIMEOUT.as_secs()
+            ));
         }
         thread::sleep(Duration::from_millis(10));
     }

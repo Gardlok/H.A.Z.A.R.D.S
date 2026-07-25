@@ -31,9 +31,11 @@ pub(super) fn probe_toolchain<P: BuildEnvironmentProbe>(
         .ok_or_else(|| ToolchainProbeFailure::Missing("cargo was not found".to_owned()))?;
 
     let sysroot_arguments = vec!["--print".to_owned(), "sysroot".to_owned()];
-    let sysroot_output = probe.run(&rustc_launcher, &sysroot_arguments).map_err(|error| {
-        ToolchainProbeFailure::Mismatch(format!("rustc sysroot probe failed: {error}"))
-    })?;
+    let sysroot_output = probe
+        .run(&rustc_launcher, &sysroot_arguments)
+        .map_err(|error| {
+            ToolchainProbeFailure::Mismatch(format!("rustc sysroot probe failed: {error}"))
+        })?;
     let sysroot = canonical_existing_directory(Path::new(sysroot_output.trim()))
         .map_err(ToolchainProbeFailure::Mismatch)?;
     let rustc_path = canonical_existing_executable(&sysroot.join("bin").join("rustc"))
@@ -94,8 +96,7 @@ pub(super) fn probe_toolchain<P: BuildEnvironmentProbe>(
             .as_deref()
             .is_some_and(|value| value != contract.target)
         || host != contract.target
-        || leading_version(&llvm_version).first().copied()
-            != Some(u64::from(contract.llvm_major))
+        || leading_version(&llvm_version).first().copied() != Some(u64::from(contract.llvm_major))
     {
         return Err(ToolchainProbeFailure::Mismatch(format!(
             "toolchain identity mismatch: rustc {rustc_release} {rustc_commit_hash} {rustc_commit_date}, cargo {cargo_release}, host {host}, LLVM {llvm_version}"
@@ -280,7 +281,10 @@ pub(super) fn invocation_template(
         .join(&source.artifact_sha256);
     let mut fixed_environment = BTreeMap::new();
     fixed_environment.insert("PATH".to_owned(), path);
-    fixed_environment.insert("HOME".to_owned(), build_root.join("home").display().to_string());
+    fixed_environment.insert(
+        "HOME".to_owned(),
+        build_root.join("home").display().to_string(),
+    );
     fixed_environment.insert(
         "CARGO_HOME".to_owned(),
         build_root.join("cargo-home").display().to_string(),
