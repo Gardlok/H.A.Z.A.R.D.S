@@ -18,8 +18,11 @@ pub use acquire::{
 pub use acquisition::{AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus};
 pub use doctor::{Check, CheckStatus, Doctor};
 pub use dotfiles::{
-    DotfileMapping, DotfilesError, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
-    DotterGenerationOutcome, GeneratedDotterProfile, SystemDotterRunner,
+    DotfileAdoptionAction, DotfileAdoptionItem, DotfileDeploymentOutcome, DotfileDeploymentPlan,
+    DotfileDeploymentReceipt, DotfileDeploymentReport, DotfileMapping, DotfileRollbackReceipt,
+    DotfileRollbackReport, DotfileRollbackResult, DotfileTargetKind, DotfilesError,
+    DotfilesManager, DotterDryRunOutcome, DotterDryRunReport, DotterGenerationOutcome,
+    GeneratedDotterProfile, SystemDotterRunner,
 };
 pub use install::{
     InstallationError, InstallationOutcome, InstallationReceipt, InstalledArtifact, Installer,

@@ -4,7 +4,8 @@ use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser, Subcommand};
 use hazards_core::{
     AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, ArtifactAcquirer,
-    CheckStatus, Doctor, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
+    CheckStatus, Doctor, DotfileDeploymentOutcome, DotfileDeploymentPlan, DotfileDeploymentReport,
+    DotfileRollbackReport, DotfilesManager, DotterDryRunOutcome, DotterDryRunReport,
     GeneratedDotterProfile, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
     Persistence, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus, ResolvedProfile,
     Role, RolledBackArtifact, StagedArtifact, SystemDotterRunner, VerifiedArtifact,
@@ -107,6 +108,12 @@ enum DotfilesCommand {
     Generate(DotfilesArgs),
     /// Run Dotter's deploy dry-run and verify every declared target stayed unchanged.
     DryRun(DotfilesArgs),
+    /// Classify existing targets and produce a state-bound confirmation token.
+    Plan(DotfilesArgs),
+    /// Back up conflicts and perform a verified, recoverable Dotter deployment.
+    Deploy(DotfilesDeployArgs),
+    /// Restore the newest applicable dotfile deployment transaction.
+    Rollback(DotfilesArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -156,6 +163,15 @@ struct DotfilesArgs {
     /// HAZARDS checkout root; discovered from the current directory when omitted.
     #[arg(long, value_name = "PATH")]
     root: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct DotfilesDeployArgs {
+    #[command(flatten)]
+    dotfiles: DotfilesArgs,
+    /// Exact confirmation token emitted by `dotfiles plan`.
+    #[arg(long, value_name = "SHA256")]
+    confirm: String,
 }
 
 #[derive(Debug, Args)]
@@ -219,10 +235,21 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
 }
 
 fn run_dotfiles(command: DotfilesCommand) -> Result<ExitCode, Box<dyn Error>> {
+    enum Operation {
+        Generate,
+        DryRun,
+        Plan,
+        Deploy(String),
+        Rollback,
+    }
+
     let registry = Registry::embedded()?;
-    let (args, dry_run) = match command {
-        DotfilesCommand::Generate(args) => (args, false),
-        DotfilesCommand::DryRun(args) => (args, true),
+    let (args, operation) = match command {
+        DotfilesCommand::Generate(args) => (args, Operation::Generate),
+        DotfilesCommand::DryRun(args) => (args, Operation::DryRun),
+        DotfilesCommand::Plan(args) => (args, Operation::Plan),
+        DotfilesCommand::Deploy(args) => (args.dotfiles, Operation::Deploy(args.confirm)),
+        DotfilesCommand::Rollback(args) => (args, Operation::Rollback),
     };
     let profile = resolve_profile(&args.profile);
     let paths = HazardsPaths::from_env()?;
@@ -234,32 +261,80 @@ fn run_dotfiles(command: DotfilesCommand) -> Result<ExitCode, Box<dyn Error>> {
     };
     let manager = DotfilesManager::new(&registry, &profile, &paths, root)?;
 
-    if !dry_run {
-        let generated = manager.generate()?;
-        if args.profile.json {
-            println!("{}", serde_json::to_string_pretty(&generated)?);
-        } else {
-            print_generated_dotter_profile(&generated);
-            println!("mode: HAZARDS state only; no dotfile target was read or changed");
+    match operation {
+        Operation::Generate => {
+            let generated = manager.generate()?;
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&generated)?);
+            } else {
+                print_generated_dotter_profile(&generated);
+                println!("mode: HAZARDS state only; no dotfile target was read or changed");
+            }
+            Ok(ExitCode::SUCCESS)
         }
-        return Ok(ExitCode::SUCCESS);
+        Operation::DryRun => {
+            let activation = verify_dotter_activation(&registry, &paths)?;
+            let report = manager.dry_run(&activation)?;
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_dotter_dry_run(&report);
+            }
+            Ok(if report.receipt.outcome == DotterDryRunOutcome::Clean {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            })
+        }
+        Operation::Plan => {
+            let plan = manager.adoption_plan()?;
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+            } else {
+                print_dotfile_deployment_plan(&plan);
+            }
+            Ok(if plan.ready {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            })
+        }
+        Operation::Deploy(confirmation) => {
+            let activation = verify_dotter_activation(&registry, &paths)?;
+            let report = manager.deploy(&activation, &confirmation)?;
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_dotfile_deployment(&report);
+            }
+            Ok(
+                if report.receipt.outcome == DotfileDeploymentOutcome::Deployed {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                },
+            )
+        }
+        Operation::Rollback => {
+            let report = manager.rollback_deployment()?;
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_dotfile_rollback(&report);
+            }
+            Ok(ExitCode::SUCCESS)
+        }
     }
+}
 
+fn verify_dotter_activation(
+    registry: &Registry,
+    paths: &HazardsPaths,
+) -> Result<hazards_core::ManagedActivation, Box<dyn Error>> {
     let (command, version_args) = registry
         .command_spec("dotter")
         .ok_or_else(|| cli_error("Dotter has no external command specification"))?;
-    let activation = Installer::for_paths(&paths).verify_active("dotter", command, version_args)?;
-    let report = manager.dry_run(&activation)?;
-    if args.profile.json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
-    } else {
-        print_dotter_dry_run(&report);
-    }
-    Ok(if report.receipt.outcome == DotterDryRunOutcome::Clean {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    Ok(Installer::for_paths(paths).verify_active("dotter", command, version_args)?)
 }
 
 fn run_arsenal(command: ArsenalCommand) -> Result<ExitCode, Box<dyn Error>> {
@@ -739,6 +814,78 @@ fn print_dotter_dry_run(report: &DotterDryRunReport) {
     );
 }
 
+fn print_dotfile_deployment_plan(plan: &DotfileDeploymentPlan) {
+    println!("profile:  {}", plan.profile_id);
+    println!("mode:     read-only; no target or HAZARDS state was changed");
+    for item in &plan.items {
+        println!(
+            "[{:<14}] {:<12} {}",
+            item.action,
+            item.package,
+            item.target.display()
+        );
+        println!("                 source  {}", item.source.display());
+        println!("                 detail  {}", item.detail);
+        if let Some(sha256) = &item.target_sha256 {
+            println!("                 current {sha256}");
+        }
+    }
+    println!("ready:    {}", plan.ready);
+    if plan.ready {
+        println!("confirm:  {}", plan.confirmation);
+    } else {
+        println!("confirm:  <unavailable while blocked>");
+    }
+}
+
+fn print_dotfile_deployment(report: &DotfileDeploymentReport) {
+    if !report.stdout.trim().is_empty() {
+        println!("{}", report.stdout.trim_end());
+    }
+    if !report.stderr.trim().is_empty() {
+        eprintln!("{}", report.stderr.trim_end());
+    }
+    println!(
+        "[{:<15}] {}",
+        report.receipt.outcome, report.receipt.profile_id
+    );
+    println!(
+        "                  backups     {}",
+        report.receipt.backup_count
+    );
+    println!(
+        "                  transaction {}",
+        report.transaction_directory.display()
+    );
+    println!(
+        "                  receipt     {}",
+        report.receipt_path.display()
+    );
+    println!(
+        "mode: verified Dotter deployment without --force; ordinary failure restores original targets"
+    );
+}
+
+fn print_dotfile_rollback(report: &DotfileRollbackReport) {
+    println!(
+        "[{:<11}] {}",
+        report.receipt.result, report.receipt.profile_id
+    );
+    println!(
+        "             restored    {} files",
+        report.receipt.restored_files
+    );
+    println!(
+        "             removed     {} managed links",
+        report.receipt.removed_links
+    );
+    println!(
+        "             transaction {}",
+        report.transaction_directory.display()
+    );
+    println!("             receipt     {}", report.receipt_path.display());
+}
+
 fn cli_error(message: impl Into<String>) -> Box<dyn Error> {
     Box::new(io::Error::other(message.into()))
 }
@@ -1185,6 +1332,86 @@ mod tests {
         assert_eq!(args.profile.role, Role::Development);
         assert!(args.root.is_none());
         assert!(!args.profile.json);
+    }
+
+    #[test]
+    fn parses_read_only_dotfile_adoption_plan() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "dotfiles",
+            "plan",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("Dotter adoption plan arguments should parse");
+
+        let Some(Command::Dotfiles {
+            command: DotfilesCommand::Plan(args),
+        }) = cli.command
+        else {
+            panic!("expected Dotter adoption plan command");
+        };
+
+        assert_eq!(args.profile.host, HostKind::Desktop);
+        assert!(args.profile.json);
+    }
+
+    #[test]
+    fn confirmed_dotfile_deployment_requires_a_token() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "dotfiles",
+            "deploy",
+            "--host",
+            "desktop",
+            "--confirm",
+            "sha256:012345",
+        ])
+        .expect("confirmed Dotter deployment arguments should parse");
+
+        let Some(Command::Dotfiles {
+            command: DotfilesCommand::Deploy(args),
+        }) = cli.command
+        else {
+            panic!("expected Dotter deployment command");
+        };
+
+        assert_eq!(args.dotfiles.profile.host, HostKind::Desktop);
+        assert_eq!(args.confirm, "sha256:012345");
+        assert!(
+            Cli::try_parse_from(["hazards", "dotfiles", "deploy", "--host", "desktop"]).is_err()
+        );
+    }
+
+    #[test]
+    fn parses_dotfile_deployment_rollback() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "dotfiles",
+            "rollback",
+            "--host",
+            "remote",
+            "--persistence",
+            "ghost",
+            "--role",
+            "operations",
+        ])
+        .expect("Dotter rollback arguments should parse");
+
+        let Some(Command::Dotfiles {
+            command: DotfilesCommand::Rollback(args),
+        }) = cli.command
+        else {
+            panic!("expected Dotter rollback command");
+        };
+
+        assert_eq!(args.profile.host, HostKind::Remote);
+        assert_eq!(args.profile.persistence, Persistence::Ghost);
     }
 
     #[test]

@@ -186,14 +186,20 @@ version and `PATH` checks. A failed rollback check restores the newer target.
 Installation is transactional per tool, not across a multi-tool `--all`
 operation.
 
-## Profile-aware Dotter preview
+## Profile-aware Dotter lifecycle
 
-The Dotter boundary has two explicit operations:
+The Dotter boundary has five explicit operations:
 
 1. `hazards dotfiles generate` derives deterministic local configuration from
    the resolved HAZARDS profile and version-controlled global mappings.
 2. `hazards dotfiles dry-run` executes the verified managed Dotter activation
    with `--dry-run` and independently checks target immutability.
+3. `hazards dotfiles plan` classifies existing targets without writing and
+   binds their state into an explicit confirmation token.
+4. `hazards dotfiles deploy` backs up adoptable conflicts, re-previews, deploys,
+   verifies links, and automatically restores ordinary failures.
+5. `hazards dotfiles rollback` restores the newest applicable transaction
+   without invoking Dotter.
 
 Generation discovers and canonicalizes the HAZARDS checkout. Each selected
 Arsenal pillar contributes its ingredient name only when that package exists in
@@ -231,9 +237,31 @@ time, content hash, or symlink destination as applicable. It repeats the
 fingerprints after Dotter exits. A nonzero exit is not clean, and any changed
 fingerprint is a mutation regardless of exit status. The command writes an
 append-only receipt containing outcome, output hashes, exit evidence, and
-changed paths. Target restoration is deliberately not guessed; a future
-confirmed deployment phase must define backups and rollback before it may
-write.
+changed paths.
+
+Adoption planning requires every ancestor beneath `HOME` to be either absent or
+a real directory. Targets are classified as absent, regular files requiring
+backup, exact managed links, or blocked objects. The confirmation token hashes
+the generated profile identity, selected source hashes, plan items, and target
+plus ancestor fingerprints. Planning does not acquire a lock or create state;
+the token is the compare-and-swap boundary when deployment later recalculates
+the plan under the profile lock.
+
+Confirmed deployment verifies the same HAZARDS-managed Dotter activation used
+for previews. Before target mutation, every adopted regular file is copied into
+a private transaction directory, rehashed, and described by durable prepared
+evidence. Deployment removes only regular files whose complete fingerprints
+still match the confirmed plan. It then runs another bounded dry-run against
+the post-adoption state. Only a clean, mutation-free preview permits the real
+shell-free `--noconfirm deploy`; `--force` is never passed.
+
+Post-deployment verification requires every selected target to be a symlink
+resolving to its exact canonical ingredient. Nonzero execution or link mismatch
+removes managed links and restores the original regular files automatically.
+Committed and automatically restored results are append-only terminal events.
+Explicit rollback selects the newest committed or interrupted transaction,
+verifies backup hashes, and preflights every target before mutation. A target
+containing unrelated later data blocks the entire rollback.
 
 ## Trust boundaries
 
@@ -261,6 +289,9 @@ write.
 - Target fingerprinting covers declared paths and their home-directory
   ancestors. It is not a general filesystem sandbox; the exact locked Dotter
   binary and the invoking user remain inside the trust boundary.
+- Dotfile deployment confirmation is valid only for the exact generated profile
+  and observed target tree. Backups are private and hash-verified before use;
+  rollback refuses ambiguous ownership rather than overwriting later changes.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
 - Source-archive checksums do not lock a transitive Cargo dependency graph.
