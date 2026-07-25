@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   quality:
@@ -14,29 +14,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-      - name: Format working tree
-        run: cargo fmt --all
-      - name: Commit rustfmt output
-        env:
-          HEAD_REF: ${{ github.head_ref }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            crates/hazards-cli/src/bin/hazards-source-prepare.rs \
-            crates/hazards-core/src/source_prepare.rs \
-            crates/hazards-core/src/source_prepare/archive.rs \
-            crates/hazards-core/src/source_prepare/evidence.rs \
-            crates/hazards-core/src/source_prepare/tests.rs
-          if ! git diff --cached --quiet; then
-            git commit -m "Apply rustfmt"
-            git push origin "HEAD:${HEAD_REF}"
-          fi
+      - name: Formatting
+        run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
@@ -73,7 +55,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
       - uses: dtolnay/rust-toolchain@1.85.0
       - run: cargo check --workspace
