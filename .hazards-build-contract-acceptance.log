@@ -1,0 +1,12 @@
+acquiring alacritty 0.17.0 from its locked source...
+[downloaded] alacritty    7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd
+             object  /tmp/tmp.QIHlb8qavu/cache/hazards/objects/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd
+             receipt /tmp/tmp.QIHlb8qavu/state/hazards/receipts/acquisitions/alacritty/0.17.0/1785021472-054240548-5020-0.json
+mode: verified cache only; nothing was extracted or installed
+preparing alacritty 0.17.0 from its verified source object...
+true
+caching locked Cargo dependencies for alacritty 0.17.0...
+true
+false
+
+acceptance_status=1
