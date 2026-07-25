@@ -86,12 +86,8 @@ pub(super) fn probe_toolchain<P: BuildEnvironmentProbe>(
         || rustc_commit_hash != contract.rustc_commit_hash
         || rustc_commit_date != contract.rustc_commit_date
         || cargo_release != contract.cargo_release
-        || cargo_commit_hash
-            .as_deref()
-            .is_some_and(|value| value != contract.rustc_commit_hash)
-        || cargo_commit_date
-            .as_deref()
-            .is_some_and(|value| value != contract.rustc_commit_date)
+        || cargo_commit_hash.as_deref() != Some(contract.cargo_commit_hash.as_str())
+        || cargo_commit_date.as_deref() != Some(contract.cargo_commit_date.as_str())
         || cargo_host
             .as_deref()
             .is_some_and(|value| value != contract.target)
