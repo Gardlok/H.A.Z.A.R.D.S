@@ -17,7 +17,7 @@
 - [ ] Ratatui Arsenal project and provider launcher
 - [ ] Project discovery with explicit root allowlists
 - [ ] Zellij create/attach/resurrect commands
-- [ ] Dotter profile generation and dry-run deployment
+- [x] Dotter profile generation and dry-run deployment
 - [x] Profile-aware read-only provision planning
 - [x] Linux x86_64/aarch64 acquisition lock with pinned SHA-256 evidence
 - [x] Verified content-addressed acquisition cache and receipts

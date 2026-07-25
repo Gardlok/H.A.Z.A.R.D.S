@@ -186,6 +186,55 @@ version and `PATH` checks. A failed rollback check restores the newer target.
 Installation is transactional per tool, not across a multi-tool `--all`
 operation.
 
+## Profile-aware Dotter preview
+
+The Dotter boundary has two explicit operations:
+
+1. `hazards dotfiles generate` derives deterministic local configuration from
+   the resolved HAZARDS profile and version-controlled global mappings.
+2. `hazards dotfiles dry-run` executes the verified managed Dotter activation
+   with `--dry-run` and independently checks target immutability.
+
+Generation discovers and canonicalizes the HAZARDS checkout. Each selected
+Arsenal pillar contributes its ingredient name only when that package exists in
+`ingredients/dotterbatter/global.toml`. This naturally selects `helixer`,
+`alacarte`, and `zellijuice` for graphical hosts and excludes `alacarte` from
+remote hosts. Every selected source must be a regular non-symlink file whose
+canonical path remains inside the checkout. Every target must use a safe `~/`
+path beneath the resolved home directory, and two sources may not claim the
+same target.
+
+Generated `local.toml` and manifest files live under:
+
+`$XDG_STATE_HOME/hazards/dotter/profiles/<profile-id>`.
+
+The manifest binds the profile axes, canonical workspace root, global and local
+configuration hashes, selected packages, source sizes and hashes, and resolved
+targets. Generation is serialized per profile, atomically replaces only
+HAZARDS-owned state, uses private permissions, and records append-only
+generated/unchanged receipts.
+
+Dry-run regenerates the expected profile in memory and requires both stored
+files to match exactly. It then requires the `~/.local/bin/dotter` activation
+to pass the installer’s managed-store, payload, version, activation, and
+current-`PATH` checks. Dotter is invoked directly with argument vectors and:
+
+- explicit generated local and version-controlled global configuration;
+- disposable cache file and directory paths;
+- nonexistent explicit pre/post hook paths;
+- `--dry-run --noconfirm deploy`;
+- null standard input, a 60-second deadline, and an 8 MiB output bound.
+
+Before execution, HAZARDS fingerprints every declared target and each parent
+path below `HOME`, including existence, kind, permissions, size, modification
+time, content hash, or symlink destination as applicable. It repeats the
+fingerprints after Dotter exits. A nonzero exit is not clean, and any changed
+fingerprint is a mutation regardless of exit status. The command writes an
+append-only receipt containing outcome, output hashes, exit evidence, and
+changed paths. Target restoration is deliberately not guessed; a future
+confirmed deployment phase must define backups and rollback before it may
+write.
+
 ## Trust boundaries
 
 - Recipe text is untrusted until compiled and approved.
@@ -205,6 +254,13 @@ operation.
 - HAZARDS trusts the invoking user and the user's private XDG roots. It does
   not claim to defend against another process running concurrently as that same
   user and deliberately rewriting those roots outside HAZARDS.
+- Dotter global mappings are trusted only after selected sources stay inside
+  the canonical checkout and targets stay beneath `HOME`. A Dotter dry-run is
+  not trusted by its flag alone: declared targets and parents are fingerprinted
+  around bounded execution of the verified managed activation.
+- Target fingerprinting covers declared paths and their home-directory
+  ancestors. It is not a general filesystem sandbox; the exact locked Dotter
+  binary and the invoking user remain inside the trust boundary.
 - A digest copied from upstream metadata provides integrity after review, not
   independent publisher identity. Signed provenance remains a separate layer.
 - Source-archive checksums do not lock a transitive Cargo dependency graph.

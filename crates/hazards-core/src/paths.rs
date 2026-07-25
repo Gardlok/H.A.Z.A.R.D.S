@@ -9,6 +9,7 @@ use thiserror::Error;
 /// XDG-aware paths used by HAZARDS.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HazardsPaths {
+    pub home: PathBuf,
     pub config: PathBuf,
     pub data: PathBuf,
     pub state: PathBuf,
@@ -30,6 +31,7 @@ impl HazardsPaths {
             .ok_or(PathsError::MissingHome)?;
 
         Ok(Self {
+            home: home.clone(),
             config: xdg_path("XDG_CONFIG_HOME", &home.join(".config")).join("hazards"),
             data: xdg_path("XDG_DATA_HOME", &home.join(".local/share")).join("hazards"),
             state: xdg_path("XDG_STATE_HOME", &home.join(".local/state")).join("hazards"),
@@ -54,6 +56,12 @@ mod tests {
     fn every_resolved_path_is_scoped_to_hazards_or_the_user_bin() {
         let paths = HazardsPaths::from_env().expect("test environment should have HOME");
 
+        assert_eq!(
+            paths.home,
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .expect("test environment should have HOME")
+        );
         assert_eq!(
             paths.config.file_name().and_then(|name| name.to_str()),
             Some("hazards")

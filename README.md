@@ -13,7 +13,9 @@ The foundation includes a read-only provision planner, exact acquisition
 evidence, a verified quarantine cache, safe private staging, and transactional
 user-local activation. It can report what a profile needs, retrieve only
 reviewed bytes, materialize a locked payload without executing it, and install
-that payload with health checks and rollback.
+that payload with health checks and rollback. Profile-aware Dotter
+configuration and independently verified deployment previews form the first
+configuration-management boundary.
 
 ## The pantry
 
@@ -78,6 +80,14 @@ $ cargo run -p hazards-cli -- provision install \
     --role development
 $ cargo run -p hazards-cli -- provision rollback \
     --tool zellij
+$ cargo run -p hazards-cli -- dotfiles generate \
+    --host desktop \
+    --persistence local \
+    --role development
+$ cargo run -p hazards-cli -- dotfiles dry-run \
+    --host desktop \
+    --persistence local \
+    --role development
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -170,6 +180,36 @@ Already-active installations are verified and receipted without replacing the
 link. Locked source archives remain ineligible: a checksum is not a
 reproducible compiler supply chain, however confidently one squints at it.
 
+`hazards dotfiles generate` discovers the HAZARDS checkout, parses the
+version-controlled `ingredients/dotterbatter/global.toml`, and selects only
+packages belonging to the resolved profile. Desktop and laptop profiles select
+Helix, Alacritty, and Zellij; remote profiles omit Alacritty because it belongs
+on the SSH client. Source paths must be regular files inside the checkout,
+targets must remain beneath `HOME`, and duplicate targets are rejected.
+
+Generation writes a deterministic `local.toml` and identity manifest under
+`$XDG_STATE_HOME/hazards/dotter/profiles/<host>-<persistence>-<role>`.
+The manifest binds configuration hashes, selected source paths and hashes,
+resolved targets, and all three profile axes. Append-only generation receipts
+live under the HAZARDS state root. Repeating the same generation reports
+`unchanged`; operators edit the profile model or version-controlled global
+mapping, never the generated file.
+
+`hazards dotfiles dry-run` refuses missing or edited generated profiles and
+requires the installed command to pass the complete HAZARDS managed-activation
+check. It then invokes the exact Dotter 0.13.5 activation directly—never through
+a shell—with explicit global/local configuration, disposable cache locations,
+disabled hook paths, `--dry-run`, and `--noconfirm`. Execution is bounded to 60
+seconds and 8 MiB of captured output.
+
+HAZARDS fingerprints every declared target and its parent path before and after
+Dotter exits. A clean exit with identical fingerprints produces a
+`dry-run-clean` receipt. A nonzero exit is `dry-run-failed`; any target or
+parent change is `mutation-detected`, regardless of what Dotter reports.
+Dry-run receipts are intentional HAZARDS state writes. No configuration target
+is supposed to change, because apparently software needs independent witnesses
+before the phrase “dry run” may be admitted into evidence.
+
 ## Build and validate
 
 HAZARDS uses Rust 2024 and supports Rust 1.85 or newer.
@@ -209,6 +249,7 @@ moustache.
 - [Verified acquisition cache decision](docs/adr/0005-verified-acquisition-cache.md)
 - [Safe materialization decision](docs/adr/0006-safe-materialization.md)
 - [Transactional user installation decision](docs/adr/0007-transactional-user-installation.md)
+- [Verified Dotter preview decision](docs/adr/0008-verified-dotter-preview.md)
 
 ## Status
 
@@ -216,6 +257,6 @@ The CLI, registry, profile resolver, diagnostic model, read-only provision and
 acquisition planners, verified acquisition cache, Rhai recipe compiler, starter
 pillar configurations, safe payload materialization, and state schema are
 functional. Transactional installation and rollback of locked prebuilt
-applications are also functional. Dotter-driven deployment, SurrealDB runtime
-wiring, Zellij automation, and the Ratatui Arsenal interface follow in later
-phases.
+applications, profile-aware Dotter generation, and verified deployment dry-runs
+are also functional. Confirmed Dotter deployment, SurrealDB runtime wiring,
+Zellij automation, and the Ratatui Arsenal interface follow in later phases.

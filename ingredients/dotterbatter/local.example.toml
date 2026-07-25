@@ -1,4 +1,5 @@
-# Copy this file to .dotter/local.toml and select packages for the host.
+# Reference only. HAZARDS now generates the active local.toml under its private
+# XDG state root from the resolved host/persistence/role profile.
 #
 # Remote hosts intentionally omit alacarte because Alacritty runs on the
 # client machine.
