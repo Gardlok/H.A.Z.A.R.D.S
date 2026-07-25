@@ -1,6 +1,7 @@
 [package]
 name = "hazards-cli"
 description = "Command-line control plane for the HAZARDS terminal workspace"
+default-run = "hazards"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +12,10 @@ repository.workspace = true
 [[bin]]
 name = "hazards"
 path = "src/main.rs"
+
+[[bin]]
+name = "hazards-source-prepare"
+path = "src/bin/hazards-source-prepare.rs"
 
 [dependencies]
 arsenallspice.workspace = true
