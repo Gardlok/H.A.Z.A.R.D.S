@@ -94,3 +94,17 @@ When testing from a development checkout, note that `cargo run` may set variable
 - `unsupported`: no reviewed contract exists for the selected target.
 
 Only `contract_ready` includes `contract_sha256`. The digest binds the versioned lock, source evidence, dependency evidence, exact toolchain, native observations, environment result, and future invocation template.
+
+## Acceptance evidence
+
+The Alacritty 0.17.0 contract was exercised in an isolated XDG environment after acquiring and preparing the locked source and checksum-verifying all 291 registry dependency archives. The planner returned `contract_ready` and emitted:
+
+```text
+sha256:c560a4aac4d3a65f879f8702435247ed89f81b711a918be76a61d998447e3b2a
+```
+
+A second inspection produced the same digest. The accepted host evidence included Rust and Cargo 1.97.1, rustc commit `8bab26f4f68e0e26f0bb7960be334d5b520ea452`, Cargo commit `c980f4866141969fab6254a680546a277789d6f0`, LLVM 22.1.6, every reviewed native command, and all four pkg-config modules.
+
+A deliberately supplied secret `RUSTFLAGS` value produced `environment_blocked`; the value was absent from the JSON and replaced with the redacted marker. Running the same inspection with Rust 1.85.0 produced `toolchain_mismatch` and no contract digest.
+
+Source-preparation and dependency-cache receipt counts were unchanged across the inspections. No HAZARDS build directory was created, no Cargo build was invoked, and no build script, compiler, linker, installation, or activation operation occurred.
