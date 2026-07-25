@@ -295,6 +295,13 @@ impl LooseVersion {
     }
 }
 
+pub(crate) fn version_matches(output: &str, expected: &str) -> bool {
+    matches!(
+        (LooseVersion::extract(output), LooseVersion::extract(expected)),
+        (Some(actual), Some(expected)) if actual == expected
+    )
+}
+
 impl PartialEq for LooseVersion {
     fn eq(&self, other: &Self) -> bool {
         compare_parts(&self.parts, &other.parts) == Ordering::Equal

@@ -1,7 +1,7 @@
 use arsenallspice::{AcquisitionLock, AcquisitionMethod, LockedArtifact};
 use serde::Serialize;
 
-use crate::{Platform, ProvisionPlan, ProvisionStatus, ResolvedProfile};
+use crate::{Platform, ProvisionItem, ProvisionPlan, ProvisionStatus, ResolvedProfile};
 
 /// Integrity readiness for one required acquisition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -59,47 +59,7 @@ impl<'a> AcquisitionPlanner<'a> {
                         | ProvisionStatus::Unsupported
                 )
             })
-            .map(|item| {
-                let install = item
-                    .install
-                    .as_ref()
-                    .expect("actionable provision item should have install intent");
-                let artifact = self.lock.select(
-                    &item.id,
-                    &install.target_version,
-                    &self.provision.platform.os,
-                    &self.provision.platform.architecture,
-                );
-                let (status, detail) = match artifact.map(|artifact| artifact.method) {
-                    Some(AcquisitionMethod::GithubRelease) => (
-                        AcquisitionStatus::LockedBinary,
-                        "prebuilt artifact and SHA-256 digest are locked".to_owned(),
-                    ),
-                    Some(AcquisitionMethod::CargoRegistry) => (
-                        AcquisitionStatus::LockedSource,
-                        "source archive and registry checksum are locked; build prerequisites are not evaluated"
-                            .to_owned(),
-                    ),
-                    None => (
-                        AcquisitionStatus::Unavailable,
-                        format!(
-                            "no locked artifact exists for {}/{}",
-                            self.provision.platform.os, self.provision.platform.architecture
-                        ),
-                    ),
-                };
-
-                AcquisitionItem {
-                    id: item.id.clone(),
-                    name: item.name.clone(),
-                    provision_status: item.status,
-                    target_version: install.target_version.clone(),
-                    destination: install.destination.clone(),
-                    status,
-                    artifact: artifact.cloned(),
-                    detail,
-                }
-            })
+            .filter_map(|item| self.resolve(item))
             .collect();
 
         AcquisitionPlan {
@@ -109,6 +69,47 @@ impl<'a> AcquisitionPlanner<'a> {
             platform: self.provision.platform.clone(),
             items,
         }
+    }
+
+    /// Resolve exact evidence for any external provision item, including one
+    /// already activated by HAZARDS.
+    pub fn resolve(&self, item: &ProvisionItem) -> Option<AcquisitionItem> {
+        let install = item.install.as_ref()?;
+        let artifact = self.lock.select(
+            &item.id,
+            &install.target_version,
+            &self.provision.platform.os,
+            &self.provision.platform.architecture,
+        );
+        let (status, detail) = match artifact.map(|artifact| artifact.method) {
+            Some(AcquisitionMethod::GithubRelease) => (
+                AcquisitionStatus::LockedBinary,
+                "prebuilt artifact and SHA-256 digest are locked".to_owned(),
+            ),
+            Some(AcquisitionMethod::CargoRegistry) => (
+                AcquisitionStatus::LockedSource,
+                "source archive and registry checksum are locked; build prerequisites are not evaluated"
+                    .to_owned(),
+            ),
+            None => (
+                AcquisitionStatus::Unavailable,
+                format!(
+                    "no locked artifact exists for {}/{}",
+                    self.provision.platform.os, self.provision.platform.architecture
+                ),
+            ),
+        };
+
+        Some(AcquisitionItem {
+            id: item.id.clone(),
+            name: item.name.clone(),
+            provision_status: item.status,
+            target_version: install.target_version.clone(),
+            destination: install.destination.clone(),
+            status,
+            artifact: artifact.cloned(),
+            detail,
+        })
     }
 }
 
@@ -193,6 +194,28 @@ mod tests {
                 .method,
             AcquisitionMethod::GithubRelease
         );
+    }
+
+    #[test]
+    fn explicit_resolution_includes_an_already_installed_external_tool() {
+        let registry = Registry::embedded().expect("registry should load");
+        let lock = AcquisitionLock::embedded(&registry).expect("acquisition lock should load");
+        let provision = provision_plan(&registry, "x86_64");
+        let planner = AcquisitionPlanner::new(&lock, &provision);
+        let installed = provision
+            .items
+            .iter()
+            .find(|item| item.id == "helix")
+            .expect("installed Helix provision item should exist");
+
+        let resolved = planner
+            .resolve(installed)
+            .expect("an external installed tool should still resolve");
+
+        assert_eq!(resolved.id, "helix");
+        assert_eq!(resolved.provision_status, ProvisionStatus::Installed);
+        assert_eq!(resolved.status, AcquisitionStatus::LockedBinary);
+        assert!(resolved.artifact.is_some());
     }
 
     #[test]

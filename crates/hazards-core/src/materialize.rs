@@ -82,31 +82,37 @@ pub struct StagedArtifact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct MaterializationManifest {
-    schema_version: u8,
-    tool_id: String,
-    version: String,
-    artifact_sha256: String,
-    payload_path: String,
-    payload_size: u64,
-    payload_sha256: String,
-    architecture: String,
-    entries: Vec<MaterializedEntry>,
+pub(crate) struct MaterializationManifest {
+    pub(crate) schema_version: u8,
+    pub(crate) tool_id: String,
+    pub(crate) version: String,
+    pub(crate) artifact_sha256: String,
+    pub(crate) payload_path: String,
+    pub(crate) payload_size: u64,
+    pub(crate) payload_sha256: String,
+    pub(crate) architecture: String,
+    pub(crate) entries: Vec<MaterializedEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
-struct MaterializedEntry {
-    path: String,
-    kind: MaterializedEntryKind,
-    size: u64,
-    sha256: Option<String>,
+pub(crate) struct MaterializedEntry {
+    pub(crate) path: String,
+    pub(crate) kind: MaterializedEntryKind,
+    pub(crate) size: u64,
+    pub(crate) sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-enum MaterializedEntryKind {
+pub(crate) enum MaterializedEntryKind {
     Directory,
     File,
+}
+
+/// A staged tree freshly reproduced from the locked cache object and compared.
+pub(crate) struct VerifiedStage {
+    pub(crate) staging_path: PathBuf,
+    pub(crate) manifest: MaterializationManifest,
 }
 
 /// Reproduces verified artifacts in a private, non-executable staging cache.
@@ -131,56 +137,11 @@ impl Materializer {
         &self,
         item: &AcquisitionItem,
     ) -> Result<StagedArtifact, MaterializationError> {
-        let artifact = item
-            .artifact
-            .as_ref()
-            .ok_or_else(|| MaterializationError::Unavailable(item.id.clone()))?;
-        validate_component("tool identifier", &item.id)?;
-        validate_component("version", &item.target_version)?;
-        let payload = locked_payload(artifact)?;
-
-        let object_path = self
-            .cache_root
-            .join("objects")
-            .join("sha256")
-            .join(&artifact.sha256[..2])
-            .join(&artifact.sha256);
-        if !object_path.exists() {
-            return Err(MaterializationError::MissingCache {
-                tool: item.id.clone(),
-                path: object_path,
-            });
-        }
-        verify_cached_object(&object_path, artifact)?;
-
-        let staging_parent = ensure_private_subdirectories(
-            &self.cache_root,
-            &["staging", "sha256", &artifact.sha256[..2]],
-        )?;
+        let (artifact, payload, object_path) = self.resolve(item)?;
+        let staging_parent = self.staging_parent(artifact)?;
         let staging_path = staging_parent.join(&artifact.sha256);
-        let candidate = Builder::new()
-            .prefix(".materialize-")
-            .tempdir_in(&staging_parent)
-            .map_err(|error| {
-                io_error("create temporary staging directory", &staging_parent, error)
-            })?;
-        ensure_private_dir(candidate.path())?;
-
-        extract_artifact(artifact, &object_path, candidate.path())?;
-        let entries = inspect_tree(candidate.path())?;
-        verify_payload(candidate.path(), payload, &artifact.architecture)?;
-        let manifest = MaterializationManifest {
-            schema_version: MANIFEST_SCHEMA_VERSION,
-            tool_id: item.id.clone(),
-            version: item.target_version.clone(),
-            artifact_sha256: artifact.sha256.clone(),
-            payload_path: payload.path.to_owned(),
-            payload_size: payload.size,
-            payload_sha256: payload.sha256.to_owned(),
-            architecture: artifact.architecture.clone(),
-            entries,
-        };
-        write_manifest(candidate.path(), &manifest)?;
+        let (candidate, manifest) =
+            reproduce(item, artifact, payload, &object_path, &staging_parent)?;
 
         let outcome = if staging_path.exists() {
             let existing = validate_existing_stage(&staging_path, payload, artifact)?;
@@ -198,6 +159,78 @@ impl Materializer {
         };
 
         self.finish(item, artifact, payload, staging_path, manifest, outcome)
+    }
+
+    /// Require an existing stage and freshly reproduce its locked artifact.
+    pub(crate) fn verify_existing(
+        &self,
+        item: &AcquisitionItem,
+    ) -> Result<VerifiedStage, MaterializationError> {
+        let (artifact, payload, object_path) = self.resolve(item)?;
+        let staging_path = self
+            .cache_root
+            .join("staging")
+            .join("sha256")
+            .join(&artifact.sha256[..2])
+            .join(&artifact.sha256);
+        if !staging_path.exists() {
+            return Err(MaterializationError::MissingStage {
+                tool: item.id.clone(),
+                path: staging_path,
+            });
+        }
+
+        let staging_parent = self.staging_parent(artifact)?;
+        let (candidate, reproduced) =
+            reproduce(item, artifact, payload, &object_path, &staging_parent)?;
+        let existing = validate_existing_stage(&staging_path, payload, artifact)?;
+        if existing != reproduced {
+            return Err(MaterializationError::CorruptStage {
+                path: staging_path,
+                reason: "staged tree does not match a fresh reproduction from the locked object"
+                    .to_owned(),
+            });
+        }
+        drop(candidate);
+
+        Ok(VerifiedStage {
+            staging_path,
+            manifest: existing,
+        })
+    }
+
+    fn resolve<'a>(
+        &self,
+        item: &'a AcquisitionItem,
+    ) -> Result<(&'a LockedArtifact, LockedPayload<'a>, PathBuf), MaterializationError> {
+        let artifact = item
+            .artifact
+            .as_ref()
+            .ok_or_else(|| MaterializationError::Unavailable(item.id.clone()))?;
+        validate_component("tool identifier", &item.id)?;
+        validate_component("version", &item.target_version)?;
+        let payload = locked_payload(artifact)?;
+        let object_path = self
+            .cache_root
+            .join("objects")
+            .join("sha256")
+            .join(&artifact.sha256[..2])
+            .join(&artifact.sha256);
+        if !object_path.exists() {
+            return Err(MaterializationError::MissingCache {
+                tool: item.id.clone(),
+                path: object_path,
+            });
+        }
+        verify_cached_object(&object_path, artifact)?;
+        Ok((artifact, payload, object_path))
+    }
+
+    fn staging_parent(&self, artifact: &LockedArtifact) -> Result<PathBuf, MaterializationError> {
+        Ok(ensure_private_subdirectories(
+            &self.cache_root,
+            &["staging", "sha256", &artifact.sha256[..2]],
+        )?)
     }
 
     fn finish(
@@ -276,6 +309,8 @@ pub enum MaterializationError {
     Unavailable(String),
     #[error("verified cache object for {tool} is missing at {path}; acquire it first")]
     MissingCache { tool: String, path: PathBuf },
+    #[error("verified staging tree for {tool} is missing at {path}; materialize it first")]
+    MissingStage { tool: String, path: PathBuf },
     #[error("source artifact for {0} has no executable payload to materialize")]
     SourceArtifact(String),
     #[error("artifact for {0} has incomplete locked payload identity")]
@@ -344,6 +379,37 @@ fn locked_payload(artifact: &LockedArtifact) -> Result<LockedPayload<'_>, Materi
             artifact.tool_id.clone(),
         )),
     }
+}
+
+fn reproduce(
+    item: &AcquisitionItem,
+    artifact: &LockedArtifact,
+    payload: LockedPayload<'_>,
+    object_path: &Path,
+    staging_parent: &Path,
+) -> Result<(TempDir, MaterializationManifest), MaterializationError> {
+    let candidate = Builder::new()
+        .prefix(".materialize-")
+        .tempdir_in(staging_parent)
+        .map_err(|error| io_error("create temporary staging directory", staging_parent, error))?;
+    ensure_private_dir(candidate.path())?;
+
+    extract_artifact(artifact, object_path, candidate.path())?;
+    let entries = inspect_tree(candidate.path())?;
+    verify_payload(candidate.path(), payload, &artifact.architecture)?;
+    let manifest = MaterializationManifest {
+        schema_version: MANIFEST_SCHEMA_VERSION,
+        tool_id: item.id.clone(),
+        version: item.target_version.clone(),
+        artifact_sha256: artifact.sha256.clone(),
+        payload_path: payload.path.to_owned(),
+        payload_size: payload.size,
+        payload_sha256: payload.sha256.to_owned(),
+        architecture: artifact.architecture.clone(),
+        entries,
+    };
+    write_manifest(candidate.path(), &manifest)?;
+    Ok((candidate, manifest))
 }
 
 fn extract_artifact(

@@ -4,8 +4,9 @@ use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser, Subcommand};
 use hazards_core::{
     AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, ArtifactAcquirer,
-    CheckStatus, Doctor, HazardsPaths, HostKind, Materializer, Persistence, ProvisionItem,
-    ProvisionPlanner, ProvisionStatus, ResolvedProfile, Role, StagedArtifact, VerifiedArtifact,
+    CheckStatus, Doctor, HazardsPaths, HostKind, InstalledArtifact, Installer, Materializer,
+    Persistence, ProvisionItem, ProvisionPlan, ProvisionPlanner, ProvisionStatus, ResolvedProfile,
+    Role, RolledBackArtifact, StagedArtifact, VerifiedArtifact,
 };
 use rhaisour::{RecipeCompiler, SAMPLE_RECIPE};
 
@@ -88,6 +89,10 @@ enum ProvisionCommand {
     Acquire(AcquireArgs),
     /// Safely reproduce verified artifacts in private, non-executable staging.
     Materialize(AcquireArgs),
+    /// Transactionally activate staged payloads in the user-local bin directory.
+    Install(AcquireArgs),
+    /// Restore the activation that preceded the latest matching installation.
+    Rollback(RollbackArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -112,12 +117,22 @@ struct ProfileArgs {
 struct AcquireArgs {
     #[command(flatten)]
     profile: ProfileArgs,
-    /// Acquire one tool by registry identifier; repeat for multiple tools.
+    /// Select one tool by registry identifier; repeat for multiple tools.
     #[arg(long, value_name = "ID", action = clap::ArgAction::Append)]
     tool: Vec<String>,
-    /// Acquire every actionable artifact in the resolved profile.
+    /// Select every actionable artifact in the resolved profile.
     #[arg(long, conflicts_with = "tool")]
     all: bool,
+}
+
+#[derive(Debug, Args)]
+struct RollbackArgs {
+    /// Registry identifier of the HAZARDS-managed command to roll back.
+    #[arg(long, value_name = "ID")]
+    tool: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -368,6 +383,58 @@ fn run_provision(command: ProvisionCommand) -> Result<ExitCode, Box<dyn Error>> 
                 );
             }
         }
+        ProvisionCommand::Install(args) => {
+            let registry = Registry::embedded()?;
+            let lock = AcquisitionLock::embedded(&registry)?;
+            let profile = resolve_profile(&args.profile);
+            let provision = ProvisionPlanner::new(&registry, &profile).plan();
+            let acquisition = AcquisitionPlanner::new(&lock, &provision).plan();
+            let selected = select_install_items(&lock, &provision, &acquisition, &args)?;
+            let paths = HazardsPaths::from_env()?;
+            let installer = Installer::for_paths(&paths);
+            let mut installed = Vec::with_capacity(selected.len());
+
+            for item in &selected {
+                let (command, version_args) = registry
+                    .command_spec(&item.id)
+                    .ok_or_else(|| cli_error(format!("tool {} has no executable", item.id)))?;
+                eprintln!(
+                    "installing {} {} from verified staging...",
+                    item.id, item.target_version
+                );
+                installed.push(installer.install(item, command, version_args)?);
+            }
+
+            if args.profile.json {
+                println!("{}", serde_json::to_string_pretty(&installed)?);
+            } else if installed.is_empty() {
+                println!("no actionable binary artifacts matched the resolved profile");
+            } else {
+                for artifact in &installed {
+                    print_installed_artifact(artifact);
+                }
+                println!(
+                    "mode: transactional user-local activation; every command passed version and PATH checks"
+                );
+            }
+        }
+        ProvisionCommand::Rollback(args) => {
+            let registry = Registry::embedded()?;
+            let (command, version_args) = registry.command_spec(&args.tool).ok_or_else(|| {
+                cli_error(format!("tool {} has no external executable", args.tool))
+            })?;
+            let paths = HazardsPaths::from_env()?;
+            let installer = Installer::for_paths(&paths);
+            eprintln!("rolling back the current {} activation...", args.tool);
+            let rolled_back = installer.rollback(&args.tool, command, version_args)?;
+
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&rolled_back)?);
+            } else {
+                print_rolled_back_artifact(&rolled_back);
+                println!("mode: prior activation restored from append-only installation evidence");
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -408,6 +475,56 @@ fn select_acquisition_items<'a>(
     Ok(selected)
 }
 
+fn select_install_items(
+    lock: &AcquisitionLock,
+    provision: &ProvisionPlan,
+    acquisition: &AcquisitionPlan,
+    args: &AcquireArgs,
+) -> Result<Vec<AcquisitionItem>, Box<dyn Error>> {
+    let planner = AcquisitionPlanner::new(lock, provision);
+    let selected = if args.all {
+        acquisition.items.clone()
+    } else {
+        let mut seen = HashSet::new();
+        let mut selected = Vec::with_capacity(args.tool.len());
+        for id in &args.tool {
+            if !seen.insert(id) {
+                return Err(cli_error(format!("tool {id} was selected more than once")));
+            }
+            let item = acquisition
+                .items
+                .iter()
+                .find(|item| &item.id == id)
+                .cloned()
+                .or_else(|| {
+                    provision
+                        .items
+                        .iter()
+                        .find(|item| &item.id == id)
+                        .and_then(|item| planner.resolve(item))
+                })
+                .ok_or_else(|| {
+                    cli_error(format!(
+                        "tool {id} is not an external application in the resolved profile"
+                    ))
+                })?;
+            selected.push(item);
+        }
+        selected
+    };
+
+    if let Some(item) = selected
+        .iter()
+        .find(|item| item.status != AcquisitionStatus::LockedBinary)
+    {
+        return Err(cli_error(format!(
+            "tool {} has no locked prebuilt binary for {}/{}; installation will not build source or invent an artifact",
+            item.id, provision.platform.os, provision.platform.architecture
+        )));
+    }
+    Ok(selected)
+}
+
 fn print_verified_artifact(artifact: &VerifiedArtifact) {
     println!(
         "[{:<10}] {:<12} {}",
@@ -436,6 +553,52 @@ fn print_staged_artifact(artifact: &StagedArtifact) {
     );
     println!(
         "               receipt  {}",
+        artifact.receipt_path.display()
+    );
+}
+
+fn print_installed_artifact(artifact: &InstalledArtifact) {
+    println!(
+        "[{:<14}] {:<12} {}",
+        artifact.receipt.outcome, artifact.receipt.tool_id, artifact.receipt.payload_sha256
+    );
+    println!(
+        "                 store      {}",
+        artifact.store_path.display()
+    );
+    println!(
+        "                 payload    {}",
+        artifact.payload_path.display()
+    );
+    println!(
+        "                 activation {}",
+        artifact.activation_path.display()
+    );
+    println!(
+        "                 receipt    {}",
+        artifact.receipt_path.display()
+    );
+}
+
+fn print_rolled_back_artifact(artifact: &RolledBackArtifact) {
+    println!(
+        "[{:<14}] {:<12} {}",
+        artifact.receipt.outcome, artifact.receipt.tool_id, artifact.receipt.payload_sha256
+    );
+    println!(
+        "                 activation {}",
+        artifact.activation_path.display()
+    );
+    println!(
+        "                 target     {}",
+        artifact
+            .active_target
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "<removed>".to_owned())
+    );
+    println!(
+        "                 receipt    {}",
         artifact.receipt_path.display()
     );
 }
@@ -772,6 +935,59 @@ mod tests {
         assert_eq!(args.tool, ["dotter"]);
         assert!(!args.all);
         assert!(args.profile.json);
+    }
+
+    #[test]
+    fn parses_an_explicit_transactional_installation() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "install",
+            "--tool",
+            "dotter",
+            "--host",
+            "desktop",
+            "--persistence",
+            "local",
+            "--role",
+            "development",
+            "--json",
+        ])
+        .expect("installation arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::Install(args),
+        }) = cli.command
+        else {
+            panic!("expected transactional installation command");
+        };
+
+        assert_eq!(args.tool, ["dotter"]);
+        assert!(!args.all);
+        assert!(args.profile.json);
+    }
+
+    #[test]
+    fn parses_an_explicit_installation_rollback() {
+        let cli = Cli::try_parse_from([
+            "hazards",
+            "provision",
+            "rollback",
+            "--tool",
+            "dotter",
+            "--json",
+        ])
+        .expect("rollback arguments should parse");
+
+        let Some(Command::Provision {
+            command: ProvisionCommand::Rollback(args),
+        }) = cli.command
+        else {
+            panic!("expected installation rollback command");
+        };
+
+        assert_eq!(args.tool, "dotter");
+        assert!(args.json);
     }
 
     #[test]

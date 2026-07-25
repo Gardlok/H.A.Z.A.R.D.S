@@ -10,9 +10,10 @@ Rust control plane instead of attempting to replace the shell, SSH, Git, or
 other perfectly serviceable system primitives.
 
 The foundation includes a read-only provision planner, exact acquisition
-evidence, a verified quarantine cache, and safe private staging. It can report
-what a profile needs, retrieve only reviewed bytes, and materialize a locked
-payload without executing or installing it.
+evidence, a verified quarantine cache, safe private staging, and transactional
+user-local activation. It can report what a profile needs, retrieve only
+reviewed bytes, materialize a locked payload without executing it, and install
+that payload with health checks and rollback.
 
 ## The pantry
 
@@ -70,6 +71,13 @@ $ cargo run -p hazards-cli -- provision materialize \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli -- provision install \
+    --tool zellij \
+    --host desktop \
+    --persistence local \
+    --role development
+$ cargo run -p hazards-cli -- provision rollback \
+    --tool zellij
 $ cargo run -p hazards-cli -- recipe check
 ```
 
@@ -135,6 +143,33 @@ non-executable. Nothing is run, replaced, added to `PATH`, or written to
 locked executable payload; reproducible source builds require their own trust
 policy.
 
+`hazards provision install` consumes an existing verified stage; it never
+downloads or silently materializes one. The complete staged tree is copied to
+the content-addressed application store under
+`~/.local/share/hazards/apps/<tool>/<version>/<artifact-sha256>`, preserving
+runtime assets while granting execute permission only to the locked payload.
+HAZARDS runs that exact payload's registered version probe before activation,
+then atomically points `~/.local/bin/<command>` at it and verifies the version,
+activation path, and the command that `PATH` actually resolves.
+
+An existing regular file, directory, foreign symlink, malformed store, or
+group/world-writable user bin directory is refused rather than adopted or
+overwritten. Successful transitions and failed recoveries receive append-only
+receipts under
+`~/.local/state/hazards/receipts/installations/<tool>/<version>`. If a
+post-activation check or receipt write fails, HAZARDS restores the preceding
+activation before returning an error. Installation is transactional per tool;
+`--all` does not pretend several independent applications form one
+all-or-nothing filesystem transaction.
+
+`hazards provision rollback --tool <id>` restores the activation recorded
+before the newest applicable successful install or upgrade. Rolling back a
+first installation removes the HAZARDS symlink. The restored command must pass
+its recorded version and `PATH` checks or the newer activation is put back.
+Already-active installations are verified and receipted without replacing the
+link. Locked source archives remain ineligible: a checksum is not a
+reproducible compiler supply chain, however confidently one squints at it.
+
 ## Build and validate
 
 HAZARDS uses Rust 2024 and supports Rust 1.85 or newer.
@@ -158,8 +193,9 @@ For a source checkout, the bootstrap helper installs the `hazards` binary into
 
 The bootstrap helper intentionally refuses to download or execute a release.
 Verified retrieval is available only through the explicit acquisition command;
-extraction, replacement, and rollback remain separate phases rather than
-features smuggled into a bootstrap script wearing a fake moustache.
+materialization, activation, and rollback remain separate explicit phases
+rather than features smuggled into a bootstrap script wearing a fake
+moustache.
 
 ## Design documentation
 
@@ -172,12 +208,14 @@ features smuggled into a bootstrap script wearing a fake moustache.
 - [Acquisition evidence decision](docs/adr/0004-lock-acquisition-evidence.md)
 - [Verified acquisition cache decision](docs/adr/0005-verified-acquisition-cache.md)
 - [Safe materialization decision](docs/adr/0006-safe-materialization.md)
+- [Transactional user installation decision](docs/adr/0007-transactional-user-installation.md)
 
 ## Status
 
 The CLI, registry, profile resolver, diagnostic model, read-only provision and
 acquisition planners, verified acquisition cache, Rhai recipe compiler, starter
 pillar configurations, safe payload materialization, and state schema are
-functional. Transactional installation of external applications, Dotter-driven
-deployment, SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal
-interface follow in later phases.
+functional. Transactional installation and rollback of locked prebuilt
+applications are also functional. Dotter-driven deployment, SurrealDB runtime
+wiring, Zellij automation, and the Ratatui Arsenal interface follow in later
+phases.

@@ -32,6 +32,8 @@ jobs:
           cargo run -p hazards-cli -- provision acquire-plan --host remote --persistence ghost --role operations --json
           cargo run -p hazards-cli -- provision acquire --help
           cargo run -p hazards-cli -- provision materialize --help
+          cargo run -p hazards-cli -- provision install --help
+          cargo run -p hazards-cli -- provision rollback --help
           cargo run -p hazards-cli -- recipe check
 
   msrv:
