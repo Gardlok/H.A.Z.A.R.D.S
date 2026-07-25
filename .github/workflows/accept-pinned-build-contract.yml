@@ -114,6 +114,7 @@ jobs:
           }
 
           first="$(run_contract "$PINNED_BIN")"
+          printf '%s\n' "$first" | jq .
           printf '%s\n' "$first" | jq -e '
             .read_only == true and
             .execution_enabled == false and
