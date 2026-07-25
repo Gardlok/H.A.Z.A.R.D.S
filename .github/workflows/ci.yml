@@ -23,8 +23,12 @@ jobs:
         run: git diff --binary > rustfmt.patch
       - uses: actions/upload-artifact@v4
         with:
-          name: rustfmt-patch
-          path: rustfmt.patch
+          name: rustfmt-output
+          path: |
+            rustfmt.patch
+            crates/hazards-cli/src/bin/hazards-source-prepare.rs
+            crates/hazards-core/src/source_prepare.rs
+            crates/hazards-core/src/source_prepare/*.rs
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Tests
