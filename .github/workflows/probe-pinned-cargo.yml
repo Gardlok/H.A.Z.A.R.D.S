@@ -6,14 +6,30 @@ on:
       - agent/pinned-build-contract
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   probe:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pinned-build-contract
       - uses: dtolnay/rust-toolchain@1.97.1
-      - name: Cargo identity
+      - name: Record identities
         run: |
-          cargo -Vv
-          rustc -vV
+          {
+            echo 'cargo:'
+            cargo -Vv
+            echo 'rustc:'
+            rustc -vV
+          } > .hazards-pinned-toolchain-identity.txt
+      - name: Commit evidence and remove probe
+        run: |
+          rm -- .github/workflows/probe-pinned-cargo.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'Record pinned Cargo identity'
+          git push origin HEAD:agent/pinned-build-contract
