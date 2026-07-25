@@ -1,0 +1,68 @@
+schema_version = 1
+observed_at = "2026-07-25"
+
+[[contracts]]
+tool_id = "alacritty"
+version = "0.17.0"
+os = "linux"
+architecture = "x86_64"
+target = "x86_64-unknown-linux-gnu"
+rust_release = "1.97.1"
+rustc_commit_hash = "8bab26f4f68e0e26f0bb7960be334d5b520ea452"
+rustc_commit_date = "2026-07-14"
+cargo_release = "1.97.1"
+llvm_major = 21
+commands = [
+  { id = "rustc", candidates = ["rustc"], args = ["-vV"] },
+  { id = "cargo", candidates = ["cargo"], args = ["-Vv"] },
+  { id = "cc", candidates = ["cc", "gcc", "clang"], args = ["--version"] },
+  { id = "cxx", candidates = ["c++", "g++", "clang++"], args = ["--version"] },
+  { id = "ar", candidates = ["ar"], args = ["--version"] },
+  { id = "ld", candidates = ["ld"], args = ["--version"] },
+  { id = "cmake", candidates = ["cmake"], args = ["--version"], minimum_version = "3.13.0" },
+  { id = "pkg-config", candidates = ["pkg-config", "pkgconf"], args = ["--version"], minimum_version = "0.29.0" },
+  { id = "python3", candidates = ["python3"], args = ["--version"], minimum_version = "3.8.0" },
+]
+pkg_config = [
+  { module = "fontconfig", minimum_version = "2.13.0" },
+  { module = "freetype2", minimum_version = "2.10.0" },
+  { module = "xkbcommon", minimum_version = "1.0.0" },
+  { module = "xcb-xfixes", minimum_version = "1.13.0" },
+]
+
+[contracts.environment]
+blocked_if_set = ["RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_TARGET_DIR", "CC", "CXX", "AR", "RANLIB", "LD", "CFLAGS", "CXXFLAGS", "LDFLAGS", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "LD_PRELOAD", "LD_LIBRARY_PATH", "LIBRARY_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "MAKEFLAGS", "CMAKE_GENERATOR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "CARGO_HTTP_PROXY"]
+clear_for_build = ["RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_TARGET_DIR", "CC", "CXX", "AR", "RANLIB", "LD", "CFLAGS", "CXXFLAGS", "LDFLAGS", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "LD_PRELOAD", "LD_LIBRARY_PATH", "LIBRARY_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "MAKEFLAGS", "CMAKE_GENERATOR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "CARGO_HTTP_PROXY"]
+
+[[contracts]]
+tool_id = "alacritty"
+version = "0.17.0"
+os = "linux"
+architecture = "aarch64"
+target = "aarch64-unknown-linux-gnu"
+rust_release = "1.97.1"
+rustc_commit_hash = "8bab26f4f68e0e26f0bb7960be334d5b520ea452"
+rustc_commit_date = "2026-07-14"
+cargo_release = "1.97.1"
+llvm_major = 21
+commands = [
+  { id = "rustc", candidates = ["rustc"], args = ["-vV"] },
+  { id = "cargo", candidates = ["cargo"], args = ["-Vv"] },
+  { id = "cc", candidates = ["cc", "gcc", "clang"], args = ["--version"] },
+  { id = "cxx", candidates = ["c++", "g++", "clang++"], args = ["--version"] },
+  { id = "ar", candidates = ["ar"], args = ["--version"] },
+  { id = "ld", candidates = ["ld"], args = ["--version"] },
+  { id = "cmake", candidates = ["cmake"], args = ["--version"], minimum_version = "3.13.0" },
+  { id = "pkg-config", candidates = ["pkg-config", "pkgconf"], args = ["--version"], minimum_version = "0.29.0" },
+  { id = "python3", candidates = ["python3"], args = ["--version"], minimum_version = "3.8.0" },
+]
+pkg_config = [
+  { module = "fontconfig", minimum_version = "2.13.0" },
+  { module = "freetype2", minimum_version = "2.10.0" },
+  { module = "xkbcommon", minimum_version = "1.0.0" },
+  { module = "xcb-xfixes", minimum_version = "1.13.0" },
+]
+
+[contracts.environment]
+blocked_if_set = ["RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_TARGET_DIR", "CC", "CXX", "AR", "RANLIB", "LD", "CFLAGS", "CXXFLAGS", "LDFLAGS", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "LD_PRELOAD", "LD_LIBRARY_PATH", "LIBRARY_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "MAKEFLAGS", "CMAKE_GENERATOR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "CARGO_HTTP_PROXY"]
+clear_for_build = ["RUSTFLAGS", "RUSTDOCFLAGS", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_TARGET_DIR", "CC", "CXX", "AR", "RANLIB", "LD", "CFLAGS", "CXXFLAGS", "LDFLAGS", "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "PKG_CONFIG_SYSROOT_DIR", "LD_PRELOAD", "LD_LIBRARY_PATH", "LIBRARY_PATH", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "MAKEFLAGS", "CMAKE_GENERATOR", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "CARGO_HTTP_PROXY"]
