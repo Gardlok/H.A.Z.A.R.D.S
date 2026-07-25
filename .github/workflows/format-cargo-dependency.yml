@@ -1,0 +1,36 @@
+name: Format Cargo dependency cache
+
+on:
+  push:
+    branches:
+      - agent/offline-cargo-dependency-cache
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/offline-cargo-dependency-cache
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Format and commit
+        run: |
+          set -euo pipefail
+          cargo fmt --all
+          rm -- .github/workflows/format-cargo-dependency.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- \
+            crates/hazards-core/src/cargo_dependency.rs \
+            crates/hazards-core/src/lib.rs \
+            crates/hazards-cli/src/bin/hazards-cargo-dependencies.rs \
+            .github/workflows/format-cargo-dependency.yml
+          git diff --cached --check
+          git commit -m 'Format Cargo dependency cache authority'
+          git push origin HEAD:agent/offline-cargo-dependency-cache
