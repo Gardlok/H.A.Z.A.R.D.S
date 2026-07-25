@@ -28,22 +28,23 @@ artifact, source preparation:
 1. requires the acquisition planner to classify the item as `locked_source`;
 2. requires an existing content-addressed cache object and independently checks
    its type, byte count, and SHA-256 digest;
-3. extracts only the locked crates.io TAR/GZip shape beneath its single expected
+3. hashes and counts the exact compressed stream consumed during extraction;
+4. extracts only the locked crates.io TAR/GZip shape beneath its single expected
    source root;
-4. accepts only bounded regular files and directories with safe relative UTF-8
+5. accepts only bounded regular files and directories with safe relative UTF-8
    paths;
-5. rejects traversal, absolute paths, backslashes, links, special entries,
+6. rejects traversal, absolute paths, backslashes, links, special entries,
    duplicates, oversized entries, excessive entry counts, and excessive total
    expansion;
-6. discards archived ownership, timestamps, and permissions, creating
+7. discards archived ownership, timestamps, and permissions, creating
    directories as `0700` and files as `0600`;
-7. independently rehashes and validates the locked `Cargo.toml` and `Cargo.lock`,
+8. independently rehashes and validates the locked `Cargo.toml` and `Cargo.lock`,
    including package identity, lock version, package count, one local root, the
    crates.io registry source, and every registry checksum;
-8. inventories every resulting file and directory in a deterministic manifest;
-9. atomically persists the private tree under
+9. inventories every resulting file and directory in a deterministic manifest;
+10. atomically persists the private tree under
    `$XDG_CACHE_HOME/hazards/sources/sha256/<prefix>/<artifact-digest>`; and
-10. writes append-only receipts under
+11. writes append-only receipts under
     `$XDG_STATE_HOME/hazards/receipts/source-preparations/<tool>/<version>`.
 
 An existing source stage is never trusted by its directory name or stored

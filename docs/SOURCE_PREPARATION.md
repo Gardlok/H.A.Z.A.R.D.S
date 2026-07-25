@@ -19,9 +19,10 @@ source artifact in the resolved profile. Add `--json` for machine-readable
 results.
 
 The command requires the exact cached outer crate and performs no network
-access. It rechecks the archive digest, safely extracts the single locked crate
-root, independently revalidates the published manifest and Cargo lock, hashes
-the complete source tree, and writes append-only evidence.
+access. It rechecks the archive digest, hashes and counts the exact compressed
+stream consumed during extraction, safely extracts the single locked crate root,
+independently revalidates the published manifest and Cargo lock, hashes the
+complete source tree, and writes append-only evidence.
 
 Prepared trees live under:
 

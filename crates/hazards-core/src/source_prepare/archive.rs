@@ -7,6 +7,7 @@ use std::{
 
 use arsenallspice::{CargoSourceLock, LockedArtifact};
 use flate2::read::GzDecoder;
+use sha2::{Digest, Sha256};
 
 use super::{
     BUFFER_SIZE, CRATES_IO_REGISTRY, GraphInspection, MAX_ARCHIVE_ENTRIES, MAX_COMPONENT_LENGTH,
@@ -23,62 +24,97 @@ pub(super) fn extract_and_validate(
 ) -> Result<GraphInspection, SourcePreparationError> {
     let object = File::open(object_path)
         .map_err(|error| io_error("open verified source object", object_path, error))?;
-    let mut archive = tar::Archive::new(GzDecoder::new(object));
-    let entries = archive
-        .entries()
-        .map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
-    let mut seen = HashSet::new();
-    let mut entry_count = 0_usize;
-    let mut expanded = 0_u64;
+    let metadata = object
+        .metadata()
+        .map_err(|error| io_error("inspect opened source object", object_path, error))?;
+    if !metadata.is_file() || metadata.len() != artifact.size {
+        return Err(SourcePreparationError::Validation(format!(
+            "opened source object size mismatch: expected {}, found {}",
+            artifact.size,
+            metadata.len()
+        )));
+    }
 
-    for result in entries {
-        let mut entry =
-            result.map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
-        entry_count = entry_count
-            .checked_add(1)
-            .ok_or(SourcePreparationError::TooManyEntries {
-                maximum: MAX_ARCHIVE_ENTRIES,
-            })?;
-        if entry_count > MAX_ARCHIVE_ENTRIES {
-            return Err(SourcePreparationError::TooManyEntries {
-                maximum: MAX_ARCHIVE_ENTRIES,
-            });
-        }
-
-        let original = entry
-            .path()
+    let mut hashing = HashingReader::new(object);
+    {
+        let decoder = GzDecoder::new(&mut hashing);
+        let mut archive = tar::Archive::new(decoder);
+        let entries = archive
+            .entries()
             .map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
-        let relative = strict_source_path(&original, &source_lock.root)?;
-        let display = relative_path_text(&relative)?;
-        if !seen.insert(display.clone()) {
-            return Err(SourcePreparationError::UnsafeEntry {
-                entry: display,
-                reason: "duplicate archive path".to_owned(),
-            });
+        let mut seen = HashSet::new();
+        let mut entry_count = 0_usize;
+        let mut expanded = 0_u64;
+
+        for result in entries {
+            let mut entry =
+                result.map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
+            entry_count =
+                entry_count
+                    .checked_add(1)
+                    .ok_or(SourcePreparationError::TooManyEntries {
+                        maximum: MAX_ARCHIVE_ENTRIES,
+                    })?;
+            if entry_count > MAX_ARCHIVE_ENTRIES {
+                return Err(SourcePreparationError::TooManyEntries {
+                    maximum: MAX_ARCHIVE_ENTRIES,
+                });
+            }
+
+            let original = entry
+                .path()
+                .map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
+            let relative = strict_source_path(&original, &source_lock.root)?;
+            let display = relative_path_text(&relative)?;
+            if !seen.insert(display.clone()) {
+                return Err(SourcePreparationError::UnsafeEntry {
+                    entry: display,
+                    reason: "duplicate archive path".to_owned(),
+                });
+            }
+
+            let entry_type = entry.header().entry_type();
+            if entry_type.is_dir() {
+                ensure_directory(destination, &relative)?;
+            } else if entry_type.is_file() {
+                let declared = entry.size();
+                validate_declared_size(&display, declared, expanded)?;
+                ensure_parent_directories(destination, &relative)?;
+                let target = destination.join(&relative);
+                let mut output = create_private_file(&target)?;
+                copy_entry(&mut entry, &mut output, &display, declared, &mut expanded)?;
+                output.sync_all().map_err(|error| {
+                    io_error("synchronize prepared source file", &target, error)
+                })?;
+            } else {
+                return Err(SourcePreparationError::UnsafeEntry {
+                    entry: display,
+                    reason: format!(
+                        "tar entry type {:?} is not a regular file or directory",
+                        entry_type.as_byte()
+                    ),
+                });
+            }
         }
 
-        let entry_type = entry.header().entry_type();
-        if entry_type.is_dir() {
-            ensure_directory(destination, &relative)?;
-        } else if entry_type.is_file() {
-            let declared = entry.size();
-            validate_declared_size(&display, declared, expanded)?;
-            ensure_parent_directories(destination, &relative)?;
-            let target = destination.join(&relative);
-            let mut output = create_private_file(&target)?;
-            copy_entry(&mut entry, &mut output, &display, declared, &mut expanded)?;
-            output
-                .sync_all()
-                .map_err(|error| io_error("synchronize prepared source file", &target, error))?;
-        } else {
-            return Err(SourcePreparationError::UnsafeEntry {
-                entry: display,
-                reason: format!(
-                    "tar entry type {:?} is not a regular file or directory",
-                    entry_type.as_byte()
-                ),
-            });
-        }
+        let mut decoder = archive.into_inner();
+        let mut sink = io::sink();
+        io::copy(&mut decoder, &mut sink)
+            .map_err(|error| SourcePreparationError::Archive(error.to_string()))?;
+    }
+
+    let (actual_size, actual_sha256) = hashing.finish();
+    if actual_size != artifact.size {
+        return Err(SourcePreparationError::Validation(format!(
+            "source object changed while being consumed: expected {} bytes, read {actual_size}",
+            artifact.size
+        )));
+    }
+    if actual_sha256 != artifact.sha256 {
+        return Err(SourcePreparationError::Validation(format!(
+            "source object changed while being consumed: expected SHA-256 {}, found {actual_sha256}",
+            artifact.sha256
+        )));
     }
 
     let source_path = destination.join(&source_lock.root);
@@ -98,6 +134,38 @@ pub(super) fn extract_and_validate(
     require_digest("Cargo.lock", &cargo_lock, &source_lock.cargo_lock_sha256)?;
     validate_manifest(&manifest, &source_lock.package, &artifact.version)?;
     validate_cargo_lock(&cargo_lock, source_lock, &artifact.version)
+}
+
+struct HashingReader<R> {
+    inner: R,
+    digest: Sha256,
+    size: u64,
+}
+
+impl<R> HashingReader<R> {
+    fn new(inner: R) -> Self {
+        Self {
+            inner,
+            digest: Sha256::new(),
+            size: 0,
+        }
+    }
+
+    fn finish(self) -> (u64, String) {
+        (self.size, format!("{:x}", self.digest.finalize()))
+    }
+}
+
+impl<R: Read> Read for HashingReader<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        let read = self.inner.read(buffer)?;
+        self.size = self
+            .size
+            .checked_add(read as u64)
+            .ok_or_else(|| io::Error::other("source object size overflowed"))?;
+        self.digest.update(&buffer[..read]);
+        Ok(read)
+    }
 }
 
 pub(super) fn strict_source_path(
