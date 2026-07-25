@@ -228,7 +228,7 @@ impl SourcePreparer {
             .ok_or_else(|| SourcePreparationError::MissingSourceLock(item.id.clone()))?;
         validate_component("source root", &source_lock.root)?;
         validate_component("source package", &source_lock.package)?;
-        if source_lock.root.as_bytes().len() > MAX_COMPONENT_LENGTH
+        if source_lock.root.len() > MAX_COMPONENT_LENGTH
             || source_lock.root != format!("{}-{}", source_lock.package, artifact.version)
             || !valid_sha256(&source_lock.manifest_sha256)
             || !valid_sha256(&source_lock.cargo_lock_sha256)
