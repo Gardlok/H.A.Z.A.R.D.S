@@ -19,4 +19,4 @@ info: default toolchain set to stable-x86_64-unknown-linux-gnu
   stable-x86_64-unknown-linux-gnu unchanged - rustc 1.97.1 (8bab26f4f 2026-07-14)
 
 info: note that the toolchain 'stable-x86_64-unknown-linux-gnu' is currently in use (overridden by '/home/runner/work/H.A.Z.A.R.D.S/H.A.Z.A.R.D.S/rust-toolchain.toml')
-unexpected patch-script indentation: ''
+README.md: expected one replacement anchor, found 0
