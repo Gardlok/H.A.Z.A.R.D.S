@@ -37,6 +37,7 @@ jobs:
           cargo run -p hazards-cli -- provision rollback --help
           cargo run -p hazards-cli --bin hazards-source-prepare -- --help
           cargo run -p hazards-cli --bin hazards-cargo-dependencies -- --help
+          cargo run -p hazards-cli --bin hazards-build-contract -- --help
           HAZARDS_CI_HOME="$(mktemp -d)"
           HOME="$HAZARDS_CI_HOME" \
             XDG_STATE_HOME="$HAZARDS_CI_HOME/state" \
