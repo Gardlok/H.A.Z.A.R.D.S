@@ -17,6 +17,10 @@ path = "src/main.rs"
 name = "hazards-source-prepare"
 path = "src/bin/hazards-source-prepare.rs"
 
+[[bin]]
+name = "hazards-cargo-dependencies"
+path = "src/bin/hazards-cargo-dependencies.rs"
+
 [dependencies]
 arsenallspice.workspace = true
 clap.workspace = true
