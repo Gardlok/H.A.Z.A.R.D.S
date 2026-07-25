@@ -26,7 +26,7 @@
 - [x] Transactional user-local installation, PATH verification, and rollback
 - [x] Read-only transitive Cargo source-build lock inspection
 - [x] Controlled private source preparation without Cargo execution
-- [ ] Offline checksum-verified Cargo dependency cache
+- [x] Offline checksum-verified Cargo dependency cache
 - [ ] Pinned Rust toolchain and native build contract
 - [ ] Controlled source-build execution and result verification
 - [ ] Signed provenance policy
