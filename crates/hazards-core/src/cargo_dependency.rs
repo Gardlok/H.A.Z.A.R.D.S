@@ -22,9 +22,7 @@ use ureq::{
 
 use crate::{
     AcquisitionItem, AcquisitionStatus, HazardsPaths, SourcePreparationOutcome, SourcePreparer,
-    acquire::{
-        ensure_private_subdirectories, set_private_file_permissions, sync_directory,
-    },
+    acquire::{ensure_private_subdirectories, set_private_file_permissions, sync_directory},
 };
 
 const BUFFER_SIZE: usize = 64 * 1024;
@@ -197,7 +195,10 @@ impl CargoDependencySource for HttpCargoDependencySource {
         &self,
         dependency: &CargoDependencySpec,
     ) -> Result<CargoDependencyPayload, CargoDependencyError> {
-        if !dependency.source_url.starts_with("https://static.crates.io/crates/") {
+        if !dependency
+            .source_url
+            .starts_with("https://static.crates.io/crates/")
+        {
             return Err(CargoDependencyError::UnsafeUrl(
                 dependency.source_url.clone(),
             ));
@@ -276,17 +277,13 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
                 });
             }
             Err(error) => {
-                return Err(io_error(
-                    "inspect prepared source",
-                    &stage_path,
-                    error,
-                ));
+                return Err(io_error("inspect prepared source", &stage_path, error));
             }
             Ok(_) => {}
         }
 
-        let prepared = SourcePreparer::new(self.cache_root.clone(), self.state_root.clone())
-            .prepare(item)?;
+        let prepared =
+            SourcePreparer::new(self.cache_root.clone(), self.state_root.clone()).prepare(item)?;
         if prepared.receipt.outcome != SourcePreparationOutcome::StageHit {
             return Err(CargoDependencyError::Validation(
                 "dependency acquisition requires an existing prepared source stage".to_owned(),
@@ -302,10 +299,8 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
             source_lock,
         )?;
 
-        let object_root = ensure_private_subdirectories(
-            &self.cache_root,
-            &["cargo", "objects", "sha256"],
-        )?;
+        let object_root =
+            ensure_private_subdirectories(&self.cache_root, &["cargo", "objects", "sha256"])?;
         let mut packages = Vec::with_capacity(dependencies.len());
         for dependency in &dependencies {
             packages.push(self.acquire_package(dependency)?);
@@ -396,11 +391,8 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
         }
         let mut temporary = NamedTempFile::new_in(&object_dir)
             .map_err(|error| io_error("create temporary crate object", &object_dir, error))?;
-        let (size, checksum) = copy_and_hash_bounded(
-            &mut payload.reader,
-            temporary.as_file_mut(),
-            MAX_CRATE_SIZE,
-        )?;
+        let (size, checksum) =
+            copy_and_hash_bounded(&mut payload.reader, temporary.as_file_mut(), MAX_CRATE_SIZE)?;
         if size == 0 {
             return Err(CargoDependencyError::Validation(format!(
                 "crate archive {} {} is empty",
@@ -415,7 +407,11 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
             });
         }
         temporary.as_file_mut().sync_all().map_err(|error| {
-            io_error("synchronize temporary crate object", temporary.path(), error)
+            io_error(
+                "synchronize temporary crate object",
+                temporary.path(),
+                error,
+            )
         })?;
 
         match temporary.persist_noclobber(&object_path) {
@@ -569,8 +565,9 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
         )?;
         let receipt_path = receipt_dir.join(format!("{}.json", receipt.receipt_id));
         let encoded = encode_json(receipt)?;
-        let mut temporary = NamedTempFile::new_in(&receipt_dir)
-            .map_err(|error| io_error("create temporary dependency receipt", &receipt_dir, error))?;
+        let mut temporary = NamedTempFile::new_in(&receipt_dir).map_err(|error| {
+            io_error("create temporary dependency receipt", &receipt_dir, error)
+        })?;
         temporary.write_all(&encoded).map_err(|error| {
             io_error(
                 "write temporary dependency receipt",
@@ -585,13 +582,15 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
                 error,
             )
         })?;
-        let file = temporary.persist_noclobber(&receipt_path).map_err(|error| {
-            io_error(
-                "persist Cargo dependency receipt",
-                &receipt_path,
-                error.error,
-            )
-        })?;
+        let file = temporary
+            .persist_noclobber(&receipt_path)
+            .map_err(|error| {
+                io_error(
+                    "persist Cargo dependency receipt",
+                    &receipt_path,
+                    error.error,
+                )
+            })?;
         set_private_file_permissions(&file, &receipt_path)?;
         sync_directory(&receipt_dir)?;
         Ok(receipt_path)
@@ -708,7 +707,8 @@ fn read_locked_file(
             "prepared Cargo.lock exceeds the {MAX_LOCK_SIZE}-byte limit"
         )));
     }
-    let bytes = fs::read(path).map_err(|error| io_error("read prepared Cargo.lock", path, error))?;
+    let bytes =
+        fs::read(path).map_err(|error| io_error("read prepared Cargo.lock", path, error))?;
     let actual = hash_bytes(&bytes);
     if actual != source_lock.cargo_lock_sha256 {
         return Err(CargoDependencyError::Validation(format!(
@@ -886,9 +886,13 @@ fn copy_and_hash_bounded(
                 maximum,
             });
         }
-        writer
-            .write_all(&buffer[..read])
-            .map_err(|error| io_error("write temporary crate object", Path::new("<temporary>"), error))?;
+        writer.write_all(&buffer[..read]).map_err(|error| {
+            io_error(
+                "write temporary crate object",
+                Path::new("<temporary>"),
+                error,
+            )
+        })?;
         digest.update(&buffer[..read]);
     }
     Ok((total, format!("{:x}", digest.finalize())))
@@ -919,8 +923,8 @@ fn verify_dependency_object(path: &Path, expected: &str) -> Result<u64, CargoDep
             });
         }
     }
-    let mut file = File::open(path)
-        .map_err(|error| io_error("open cached crate object", path, error))?;
+    let mut file =
+        File::open(path).map_err(|error| io_error("open cached crate object", path, error))?;
     let actual = hash_reader(&mut file)?;
     if actual != expected {
         return Err(CargoDependencyError::CorruptObject {
@@ -950,8 +954,8 @@ fn validate_manifest_file(
             reason: format!("manifest exceeds {MAX_EVIDENCE_SIZE} bytes"),
         });
     }
-    let actual = fs::read(path)
-        .map_err(|error| io_error("read Cargo dependency manifest", path, error))?;
+    let actual =
+        fs::read(path).map_err(|error| io_error("read Cargo dependency manifest", path, error))?;
     let parsed: CargoDependencyManifest = serde_json::from_slice(&actual)
         .map_err(|error| CargoDependencyError::Evidence(error.to_string()))?;
     if &parsed != expected || actual != encoded {
@@ -1020,9 +1024,9 @@ fn safe_crate_name(value: &str) -> bool {
 fn safe_crate_version(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+' | b'_')
-        })
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+' | b'_'))
 }
 
 fn network_error(error: ureq::Error) -> CargoDependencyError {

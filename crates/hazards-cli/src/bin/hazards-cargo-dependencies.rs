@@ -3,9 +3,9 @@ use std::{collections::HashSet, error::Error, io, process::ExitCode};
 use arsenallspice::{AcquisitionLock, Registry};
 use clap::{ArgGroup, Args, Parser};
 use hazards_core::{
-    AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus, CachedCargoDependencies,
-    CargoDependencyAcquirer, HazardsPaths, HostKind, Persistence, ProvisionPlan,
-    ProvisionPlanner, ResolvedProfile, Role,
+    AcquisitionItem, AcquisitionPlan, AcquisitionPlanner, AcquisitionStatus,
+    CachedCargoDependencies, CargoDependencyAcquirer, HazardsPaths, HostKind, Persistence,
+    ProvisionPlan, ProvisionPlanner, ResolvedProfile, Role,
 };
 
 #[derive(Debug, Parser)]
@@ -206,13 +206,9 @@ mod tests {
 
     #[test]
     fn dependency_cache_rejects_tool_and_all_together() {
-        let error = Cli::try_parse_from([
-            "hazards-cargo-dependencies",
-            "--tool",
-            "alacritty",
-            "--all",
-        ])
-        .expect_err("conflicting selection should fail");
+        let error =
+            Cli::try_parse_from(["hazards-cargo-dependencies", "--tool", "alacritty", "--all"])
+                .expect_err("conflicting selection should fail");
 
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
