@@ -1,0 +1,29 @@
+name: PR14 temporary evidence cleanup
+
+on:
+  push:
+    branches: [agent/controlled-source-build]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/controlled-source-build
+      - name: Remove temporary acceptance machinery
+        run: |
+          rm -rf pr14-acceptance
+          rm -f .github/pr14-acceptance.sh
+          rm -f .github/workflows/pr14-cleanup.yml
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git diff --cached --quiet && exit 0
+          git commit -m "Remove temporary PR14 acceptance evidence"
+          git push origin HEAD:agent/controlled-source-build
