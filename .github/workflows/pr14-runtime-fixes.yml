@@ -24,114 +24,116 @@ jobs:
 
           materialize = Path("crates/hazards-core/src/build_execution/materialize.rs")
           text = materialize.read_text()
-          old = '''    match fs::symlink_metadata(build_root) {
-              Ok(_) => {
+          if "refusing concurrent or stale execution state" not in text:
+              old = '''    match fs::symlink_metadata(build_root) {
+                  Ok(_) => {
+                      return Err(SourceBuildError::UnsafePath {
+                          path: build_root.to_path_buf(),
+                          reason: "build root already exists; refusing to reuse stale execution state"
+                              .to_owned(),
+                      });
+                  }
+                  Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                  Err(error) => return Err(io_error("inspect build root", build_root, error)),
+              }
+              ensure_private_directory(build_root)?;
+
+              let source = contract
+                  .source
+                  .as_ref()
+                  .ok_or(SourceBuildError::MissingSourceEvidence)?;
+              let dependencies = contract
+                  .dependencies
+                  .as_ref()
+                  .ok_or(SourceBuildError::MissingDependencyEvidence)?;
+              '''
+              new = '''    let source = contract
+                  .source
+                  .as_ref()
+                  .ok_or(SourceBuildError::MissingSourceEvidence)?;
+              let dependencies = contract
+                  .dependencies
+                  .as_ref()
+                  .ok_or(SourceBuildError::MissingDependencyEvidence)?;
+              let expected_build_root = paths
+                  .cache
+                  .join("builds")
+                  .join(&source.artifact_sha256[..2])
+                  .join(&source.artifact_sha256);
+              if build_root != expected_build_root {
                   return Err(SourceBuildError::UnsafePath {
                       path: build_root.to_path_buf(),
-                      reason: "build root already exists; refusing to reuse stale execution state"
-                          .to_owned(),
+                      reason: "build root does not match the contract-bound cache path".to_owned(),
                   });
               }
-              Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-              Err(error) => return Err(io_error("inspect build root", build_root, error)),
-          }
-          ensure_private_directory(build_root)?;
-
-          let source = contract
-              .source
-              .as_ref()
-              .ok_or(SourceBuildError::MissingSourceEvidence)?;
-          let dependencies = contract
-              .dependencies
-              .as_ref()
-              .ok_or(SourceBuildError::MissingDependencyEvidence)?;
-          '''
-          new = '''    let source = contract
-              .source
-              .as_ref()
-              .ok_or(SourceBuildError::MissingSourceEvidence)?;
-          let dependencies = contract
-              .dependencies
-              .as_ref()
-              .ok_or(SourceBuildError::MissingDependencyEvidence)?;
-          let expected_build_root = paths
-              .cache
-              .join("builds")
-              .join(&source.artifact_sha256[..2])
-              .join(&source.artifact_sha256);
-          if build_root != expected_build_root {
-              return Err(SourceBuildError::UnsafePath {
-                  path: build_root.to_path_buf(),
-                  reason: "build root does not match the contract-bound cache path".to_owned(),
-              });
-          }
-          let build_parent = build_root.parent().ok_or_else(|| {
-              SourceBuildError::Validation("private build root has no parent".to_owned())
-          })?;
-          ensure_private_directory(build_parent)?;
-          match fs::create_dir(build_root) {
-              Ok(()) => ensure_private_directory(build_root)?,
-              Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                  return Err(SourceBuildError::UnsafePath {
-                      path: build_root.to_path_buf(),
-                      reason: "build root already exists; refusing concurrent or stale execution state"
-                          .to_owned(),
-                  });
+              let build_parent = build_root.parent().ok_or_else(|| {
+                  SourceBuildError::Validation("private build root has no parent".to_owned())
+              })?;
+              ensure_private_directory(build_parent)?;
+              match fs::create_dir(build_root) {
+                  Ok(()) => ensure_private_directory(build_root)?,
+                  Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                      return Err(SourceBuildError::UnsafePath {
+                          path: build_root.to_path_buf(),
+                          reason: "build root already exists; refusing concurrent or stale execution state"
+                              .to_owned(),
+                      });
+                  }
+                  Err(error) => return Err(io_error("create private build root", build_root, error)),
               }
-              Err(error) => return Err(io_error("create private build root", build_root, error)),
-          }
 
-          '''
-          assert text.count(old) == 1
-          materialize.write_text(text.replace(old, new))
+              '''
+              assert text.count(old) == 1
+              materialize.write_text(text.replace(old, new))
 
           process = Path("crates/hazards-core/src/build_execution/process.rs")
           text = process.read_text()
-          old = '''    let mut outcome = outcome;
-          let mut detail = detail;
-          for path in [&stdout_path, &stderr_path] {
-          '''
-          new = '''    let mut outcome = outcome;
-          let mut detail = detail;
-          if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
-              match (file_length(&stdout_path), file_length(&stderr_path)) {
-                  (Ok(stdout), Ok(stderr))
-                      if stdout.saturating_add(stderr) > limits.maximum_output_bytes =>
-                  {
-                      outcome = ProcessOutcome::OutputLimitExceeded;
-                      detail = format!(
-                          "combined output exceeded {} bytes before process exit was observed",
-                          limits.maximum_output_bytes
-                      );
-                  }
-                  (Ok(_), Ok(_)) => {}
-                  (left, right) => {
-                      let error = left.err().or_else(|| right.err()).expect("one size failed");
-                      outcome = ProcessOutcome::Ambiguous;
-                      detail = format!("could not observe final build output size: {error}");
-                  }
-              }
-          }
-          if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
-              match directory_size_bounded(build_root, limits.maximum_build_bytes) {
-                  Ok(size) if size > limits.maximum_build_bytes => {
-                      outcome = ProcessOutcome::FilesystemLimitExceeded;
-                      detail = format!(
-                          "build tree exceeded {} bytes before process exit was observed",
-                          limits.maximum_build_bytes
-                      );
-                  }
-                  Ok(_) => {}
-                  Err(error) => {
-                      outcome = ProcessOutcome::Ambiguous;
-                      detail = format!("could not observe final build-tree size: {error}");
+          if "before process exit was observed" not in text:
+              old = '''    let mut outcome = outcome;
+              let mut detail = detail;
+              for path in [&stdout_path, &stderr_path] {
+              '''
+              new = '''    let mut outcome = outcome;
+              let mut detail = detail;
+              if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
+                  match (file_length(&stdout_path), file_length(&stderr_path)) {
+                      (Ok(stdout), Ok(stderr))
+                          if stdout.saturating_add(stderr) > limits.maximum_output_bytes =>
+                      {
+                          outcome = ProcessOutcome::OutputLimitExceeded;
+                          detail = format!(
+                              "combined output exceeded {} bytes before process exit was observed",
+                              limits.maximum_output_bytes
+                          );
+                      }
+                      (Ok(_), Ok(_)) => {}
+                      (left, right) => {
+                          let error = left.err().or_else(|| right.err()).expect("one size failed");
+                          outcome = ProcessOutcome::Ambiguous;
+                          detail = format!("could not observe final build output size: {error}");
+                      }
                   }
               }
-          }
-          for path in [&stdout_path, &stderr_path] {
-          '''
-          assert text.count(old) == 1
-          process.write_text(text.replace(old, new))
+              if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
+                  match directory_size_bounded(build_root, limits.maximum_build_bytes) {
+                      Ok(size) if size > limits.maximum_build_bytes => {
+                          outcome = ProcessOutcome::FilesystemLimitExceeded;
+                          detail = format!(
+                              "build tree exceeded {} bytes before process exit was observed",
+                              limits.maximum_build_bytes
+                          );
+                      }
+                      Ok(_) => {}
+                      Err(error) => {
+                          outcome = ProcessOutcome::Ambiguous;
+                          detail = format!("could not observe final build-tree size: {error}");
+                      }
+                  }
+              }
+              for path in [&stdout_path, &stderr_path] {
+              '''
+              assert text.count(old) == 1
+              process.write_text(text.replace(old, new))
           PY
           cargo fmt --all
       - name: Commit fixes
