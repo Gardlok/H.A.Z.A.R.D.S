@@ -28,8 +28,15 @@ or invocation details change the digest and invalidate stale confirmation.
 
 ## Sandbox boundary
 
-The pinned contract includes Bubblewrap as a reviewed native requirement. Cargo
-runs through the exact observed Bubblewrap executable with:
+The pinned contract includes Bubblewrap as a reviewed native requirement. The
+host must permit unprivileged user namespaces and network-namespace setup for the
+calling user. A distribution security policy may block that capability even when
+the `bwrap` executable itself satisfies the pinned version; in that case execution
+fails closed before Cargo starts, commonly with a Bubblewrap namespace error. The
+operator must correct the host policy rather than remove the network-isolation
+flags or run the build authority with elevated privileges.
+
+Cargo runs through the exact observed Bubblewrap executable with:
 
 - a cleared caller environment;
 - private user, PID, network, IPC, and UTS namespaces;
