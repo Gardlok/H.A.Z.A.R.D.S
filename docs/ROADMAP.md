@@ -28,7 +28,7 @@
 - [x] Controlled private source preparation without Cargo execution
 - [x] Offline checksum-verified Cargo dependency cache
 - [x] Pinned Rust toolchain and native build contract
-- [ ] Controlled source-build execution and result verification
+- [x] Controlled source-build execution and result verification
 - [ ] Signed provenance policy
 - [ ] Binary release bootstrap and rollback
 
