@@ -63,11 +63,13 @@ fn run(cli: Cli) -> Result<ExitCode, Box<dyn Error>> {
     } else {
         print_result(&result);
     }
-    Ok(if result.receipt.outcome == ControlledBuildOutcome::Succeeded {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    })
+    Ok(
+        if result.receipt.outcome == ControlledBuildOutcome::Succeeded {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        },
+    )
 }
 
 fn select_source_item(

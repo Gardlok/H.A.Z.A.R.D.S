@@ -168,9 +168,16 @@ impl<'a> SourceBuildExecutor<'a> {
         let build_root = invocation
             .current_dir
             .parent()
-            .ok_or_else(|| SourceBuildError::Validation("build source path has no parent".to_owned()))?
+            .ok_or_else(|| {
+                SourceBuildError::Validation("build source path has no parent".to_owned())
+            })?
             .to_path_buf();
-        if invocation.current_dir.file_name().and_then(|name| name.to_str()) != Some("source") {
+        if invocation
+            .current_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            != Some("source")
+        {
             return Err(SourceBuildError::Validation(
                 "contract invocation does not use a private source copy".to_owned(),
             ));
@@ -224,13 +231,8 @@ impl<'a> SourceBuildExecutor<'a> {
         }
 
         if outcome == ControlledBuildOutcome::Succeeded {
-            match verify_and_store_artifact(
-                self.paths,
-                &invocation,
-                source,
-                &build_root,
-                &item.id,
-            ) {
+            match verify_and_store_artifact(self.paths, &invocation, source, &build_root, &item.id)
+            {
                 Ok(evidence) => artifact = Some(evidence),
                 Err(error) => {
                     outcome = ControlledBuildOutcome::ArtifactRejected;
@@ -305,16 +307,11 @@ fn inspect_contract(
     platform: &Platform,
     item: &AcquisitionItem,
 ) -> Result<BuildContractItem, SourceBuildError> {
-    let plan = BuildContractPlanner::for_paths(paths)?.plan(
-        profile,
-        platform,
-        std::slice::from_ref(item),
-    );
-    let inspected = plan
-        .items
-        .into_iter()
-        .next()
-        .ok_or_else(|| SourceBuildError::Validation("build contract returned no item".to_owned()))?;
+    let plan =
+        BuildContractPlanner::for_paths(paths)?.plan(profile, platform, std::slice::from_ref(item));
+    let inspected = plan.items.into_iter().next().ok_or_else(|| {
+        SourceBuildError::Validation("build contract returned no item".to_owned())
+    })?;
     if inspected.status != BuildContractStatus::ContractReady {
         return Err(SourceBuildError::ContractNotReady {
             status: inspected.status,
@@ -509,7 +506,8 @@ pub(super) fn hash_file_bounded(path: &Path, maximum: u64) -> Result<String, Sou
             reason: format!("expected a regular file no larger than {maximum} bytes"),
         });
     }
-    let mut file = File::open(path).map_err(|error| io_error("open file for hashing", path, error))?;
+    let mut file =
+        File::open(path).map_err(|error| io_error("open file for hashing", path, error))?;
     let mut digest = Sha256::new();
     let mut buffer = [0_u8; 64 * 1024];
     loop {
@@ -549,7 +547,9 @@ pub enum SourceBuildError {
     },
     #[error("confirmation must have the form sha256:<64 lowercase hexadecimal characters>")]
     MalformedConfirmation,
-    #[error("build confirmation does not match the current contract: expected sha256:{expected}, received sha256:{provided}")]
+    #[error(
+        "build confirmation does not match the current contract: expected sha256:{expected}, received sha256:{provided}"
+    )]
     ConfirmationMismatch { expected: String, provided: String },
     #[error("ready build contract did not include a digest")]
     MissingContractDigest,

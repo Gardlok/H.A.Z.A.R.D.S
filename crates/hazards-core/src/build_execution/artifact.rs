@@ -30,7 +30,9 @@ pub(super) fn verify_and_store_artifact(
         .fixed_environment
         .get("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .ok_or_else(|| SourceBuildError::Artifact("invocation omits CARGO_TARGET_DIR".to_owned()))?;
+        .ok_or_else(|| {
+            SourceBuildError::Artifact("invocation omits CARGO_TARGET_DIR".to_owned())
+        })?;
     if !target_dir.starts_with(build_root) {
         return Err(SourceBuildError::Artifact(
             "Cargo target directory escapes the private build root".to_owned(),
@@ -88,8 +90,8 @@ fn reject_unexpected_top_level_executables(
     let entries = fs::read_dir(release_dir)
         .map_err(|error| io_error("read release output directory", release_dir, error))?;
     for entry in entries {
-        let entry = entry
-            .map_err(|error| io_error("read release output entry", release_dir, error))?;
+        let entry =
+            entry.map_err(|error| io_error("read release output entry", release_dir, error))?;
         let path = entry.path();
         if path == expected {
             continue;
@@ -204,9 +206,9 @@ fn store_result_object(
         if read == 0 {
             break;
         }
-        total = total
-            .checked_add(read as u64)
-            .ok_or_else(|| SourceBuildError::Artifact("result object size overflowed".to_owned()))?;
+        total = total.checked_add(read as u64).ok_or_else(|| {
+            SourceBuildError::Artifact("result object size overflowed".to_owned())
+        })?;
         if total > MAX_ARTIFACT_BYTES {
             return Err(SourceBuildError::Artifact(format!(
                 "result object exceeds {MAX_ARTIFACT_BYTES} bytes"
@@ -223,10 +225,13 @@ fn store_result_object(
             "result object changed while copying: expected {size} bytes and {sha256}, found {total} bytes and {actual}"
         )));
     }
-    temporary
-        .as_file_mut()
-        .sync_all()
-        .map_err(|error| io_error("synchronize temporary result object", temporary.path(), error))?;
+    temporary.as_file_mut().sync_all().map_err(|error| {
+        io_error(
+            "synchronize temporary result object",
+            temporary.path(),
+            error,
+        )
+    })?;
     match temporary.persist_noclobber(&object_path) {
         Ok(file) => {
             set_result_permissions(&file, &object_path)?;
@@ -252,11 +257,7 @@ fn store_result_object(
             }
             Ok(object_path)
         }
-        Err(error) => Err(io_error(
-            "persist result object",
-            &object_path,
-            error.error,
-        )),
+        Err(error) => Err(io_error("persist result object", &object_path, error.error)),
     }
 }
 

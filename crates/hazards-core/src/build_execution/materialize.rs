@@ -72,7 +72,11 @@ pub(super) fn materialize_build_inputs(
         .as_ref()
         .ok_or(SourceBuildError::MissingDependencyEvidence)?;
     require_child(build_root, &invocation.current_dir, "source directory")?;
-    copy_source_tree(&source.source_path, &invocation.current_dir, MAX_SOURCE_BYTES)?;
+    copy_source_tree(
+        &source.source_path,
+        &invocation.current_dir,
+        MAX_SOURCE_BYTES,
+    )?;
     require_digest(
         &invocation.current_dir.join("Cargo.toml"),
         &source.cargo_manifest_sha256,
@@ -82,12 +86,9 @@ pub(super) fn materialize_build_inputs(
         &source.cargo_lock_sha256,
     )?;
 
-    let verified = CargoDependencyAcquirer::new(
-        NoNetworkSource,
-        paths.cache.clone(),
-        paths.state.clone(),
-    )
-    .verify_existing(item)?;
+    let verified =
+        CargoDependencyAcquirer::new(NoNetworkSource, paths.cache.clone(), paths.state.clone())
+            .verify_existing(item)?;
     if verified.manifest_sha256 != dependencies.manifest_sha256
         || verified.dependency_count != dependencies.dependency_count
         || verified.total_bytes != dependencies.total_bytes
@@ -157,7 +158,11 @@ fn require_child(root: &Path, path: &Path, label: &str) -> Result<(), SourceBuil
     Ok(())
 }
 
-fn copy_source_tree(source: &Path, destination: &Path, maximum: u64) -> Result<(), SourceBuildError> {
+fn copy_source_tree(
+    source: &Path,
+    destination: &Path,
+    maximum: u64,
+) -> Result<(), SourceBuildError> {
     let metadata = fs::symlink_metadata(source)
         .map_err(|error| io_error("inspect prepared source", source, error))?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -205,7 +210,11 @@ fn copy_directory_contents(
                     "source copy exceeds {maximum} bytes"
                 )));
             }
-            copy_regular_file(&source_path, &destination_path, source_is_executable(&metadata))?;
+            copy_regular_file(
+                &source_path,
+                &destination_path,
+                source_is_executable(&metadata),
+            )?;
         } else {
             return Err(SourceBuildError::UnsafePath {
                 path: source_path,
@@ -221,7 +230,8 @@ fn copy_regular_file(
     destination: &Path,
     executable: bool,
 ) -> Result<(), SourceBuildError> {
-    let mut input = File::open(source).map_err(|error| io_error("open source file", source, error))?;
+    let mut input =
+        File::open(source).map_err(|error| io_error("open source file", source, error))?;
     let mut output = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -284,9 +294,9 @@ fn extract_crate(
                 package.name, package.version
             ))
         })?;
-        entry_count = entry_count
-            .checked_add(1)
-            .ok_or_else(|| SourceBuildError::Validation("crate entry count overflowed".to_owned()))?;
+        entry_count = entry_count.checked_add(1).ok_or_else(|| {
+            SourceBuildError::Validation("crate entry count overflowed".to_owned())
+        })?;
         if entry_count > MAX_CRATE_ENTRIES {
             return Err(SourceBuildError::Validation(format!(
                 "crate {} {} contains more than {MAX_CRATE_ENTRIES} entries",
@@ -377,12 +387,10 @@ fn extract_crate(
 }
 
 fn validated_crate_path(path: &Path, root: &str) -> Result<PathBuf, SourceBuildError> {
-    let encoded = path
-        .to_str()
-        .ok_or_else(|| SourceBuildError::UnsafePath {
-            path: path.to_path_buf(),
-            reason: "crate path is not UTF-8".to_owned(),
-        })?;
+    let encoded = path.to_str().ok_or_else(|| SourceBuildError::UnsafePath {
+        path: path.to_path_buf(),
+        reason: "crate path is not UTF-8".to_owned(),
+    })?;
     if encoded.is_empty() || encoded.len() > MAX_PATH_LENGTH || encoded.contains('\\') {
         return Err(SourceBuildError::UnsafePath {
             path: path.to_path_buf(),
@@ -432,9 +440,9 @@ fn copy_and_hash(
         if read == 0 {
             break;
         }
-        total = total
-            .checked_add(read as u64)
-            .ok_or_else(|| SourceBuildError::Validation("crate entry size overflowed".to_owned()))?;
+        total = total.checked_add(read as u64).ok_or_else(|| {
+            SourceBuildError::Validation("crate entry size overflowed".to_owned())
+        })?;
         if total > expected {
             return Err(SourceBuildError::Validation(format!(
                 "crate entry {} exceeded its declared size",
@@ -559,9 +567,9 @@ fn safe_component(value: &str) -> bool {
     !value.is_empty()
         && value != "."
         && value != ".."
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
-        })
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'))
 }
 
 fn source_is_executable(metadata: &fs::Metadata) -> bool {

@@ -105,7 +105,11 @@ pub(super) fn run_controlled(
                 } else {
                     ProcessOutcome::Failed
                 };
-                break (outcome, Some(status), format!("process exited with {status}"));
+                break (
+                    outcome,
+                    Some(status),
+                    format!("process exited with {status}"),
+                );
             }
             Ok(None) => {}
             Err(error) => {
@@ -183,10 +187,7 @@ pub(super) fn run_controlled(
                         ProcessOutcome::Ambiguous
                     },
                     status,
-                    format!(
-                        "build tree exceeded {} bytes",
-                        limits.maximum_build_bytes
-                    ),
+                    format!("build tree exceeded {} bytes", limits.maximum_build_bytes),
                 );
             }
         }

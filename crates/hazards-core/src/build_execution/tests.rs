@@ -36,11 +36,11 @@ fn elf_machine_must_match_the_pinned_target() {
     header[16..18].copy_from_slice(&3_u16.to_le_bytes());
     header[18..20].copy_from_slice(&62_u16.to_le_bytes());
     let mut file = fs::File::create(&path).expect("ELF fixture should be created");
-    file.write_all(&header).expect("ELF fixture should be written");
+    file.write_all(&header)
+        .expect("ELF fixture should be written");
 
     assert_eq!(
-        verify_elf_for_test(&path, "x86_64-unknown-linux-gnu")
-            .expect("x86_64 ELF should pass"),
+        verify_elf_for_test(&path, "x86_64-unknown-linux-gnu").expect("x86_64 ELF should pass"),
         62
     );
     let error = verify_elf_for_test(&path, "aarch64-unknown-linux-gnu")
