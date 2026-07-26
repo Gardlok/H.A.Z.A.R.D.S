@@ -1,7 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env,
-    path::Path,
+    env, fs,
+    path::{Path, PathBuf},
 };
 
 use serde::Serialize;
@@ -277,6 +277,16 @@ pub(super) fn invocation_template(
         .join("builds")
         .join(&source.artifact_sha256[..2])
         .join(&source.artifact_sha256);
+    let bubblewrap = commands
+        .iter()
+        .find(|command| command.id == "bwrap" && command.satisfied)
+        .and_then(|command| command.path.as_ref())
+        .ok_or_else(|| "the pinned filesystem and network sandbox is unavailable".to_owned())?;
+    let cargo = toolchain
+        .cargo_path
+        .to_str()
+        .ok_or_else(|| "the pinned Cargo path is not UTF-8".to_owned())?;
+
     let mut fixed_environment = BTreeMap::new();
     fixed_environment.insert("PATH".to_owned(), path);
     fixed_environment.insert(
@@ -291,28 +301,115 @@ pub(super) fn invocation_template(
         "CARGO_TARGET_DIR".to_owned(),
         build_root.join("target").display().to_string(),
     );
+    fixed_environment.insert(
+        "TMPDIR".to_owned(),
+        build_root.join("tmp").display().to_string(),
+    );
+    fixed_environment.insert(
+        "XDG_CACHE_HOME".to_owned(),
+        build_root.join("xdg-cache").display().to_string(),
+    );
+    fixed_environment.insert(
+        "XDG_CONFIG_HOME".to_owned(),
+        build_root.join("xdg-config").display().to_string(),
+    );
+    fixed_environment.insert(
+        "XDG_DATA_HOME".to_owned(),
+        build_root.join("xdg-data").display().to_string(),
+    );
+    fixed_environment.insert(
+        "XDG_STATE_HOME".to_owned(),
+        build_root.join("xdg-state").display().to_string(),
+    );
+    fixed_environment.insert("CARGO_INCREMENTAL".to_owned(), "0".to_owned());
     fixed_environment.insert("CARGO_NET_OFFLINE".to_owned(), "true".to_owned());
+    fixed_environment.insert("CARGO_TERM_COLOR".to_owned(), "never".to_owned());
+    fixed_environment.insert("RUST_BACKTRACE".to_owned(), "0".to_owned());
     fixed_environment.insert("LANG".to_owned(), "C.UTF-8".to_owned());
     fixed_environment.insert("LC_ALL".to_owned(), "C.UTF-8".to_owned());
     fixed_environment.insert("TZ".to_owned(), "UTC".to_owned());
     fixed_environment.insert("SOURCE_DATE_EPOCH".to_owned(), "0".to_owned());
 
+    let mut arguments = vec![
+        "--die-with-parent".to_owned(),
+        "--new-session".to_owned(),
+        "--unshare-user".to_owned(),
+        "--uid".to_owned(),
+        "0".to_owned(),
+        "--gid".to_owned(),
+        "0".to_owned(),
+        "--unshare-pid".to_owned(),
+        "--unshare-net".to_owned(),
+        "--unshare-ipc".to_owned(),
+        "--unshare-uts".to_owned(),
+        "--proc".to_owned(),
+        "/proc".to_owned(),
+        "--dev".to_owned(),
+        "/dev".to_owned(),
+        "--tmpfs".to_owned(),
+        "/tmp".to_owned(),
+    ];
+    for system_path in ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"] {
+        if fs::symlink_metadata(system_path).is_ok() {
+            arguments.push("--ro-bind".to_owned());
+            arguments.push(system_path.to_owned());
+            arguments.push(system_path.to_owned());
+        }
+    }
+
+    let mut sandbox_directories = sandbox_parent_directories(&toolchain.sysroot);
+    sandbox_directories.extend(sandbox_parent_directories(&build_root));
+    sandbox_directories.sort_by(|left, right| {
+        left.components()
+            .count()
+            .cmp(&right.components().count())
+            .then_with(|| left.cmp(right))
+    });
+    sandbox_directories.dedup();
+    for directory in sandbox_directories {
+        arguments.push("--dir".to_owned());
+        arguments.push(directory.display().to_string());
+    }
+    arguments.push("--ro-bind".to_owned());
+    arguments.push(toolchain.sysroot.display().to_string());
+    arguments.push(toolchain.sysroot.display().to_string());
+    arguments.push("--bind".to_owned());
+    arguments.push(build_root.display().to_string());
+    arguments.push(build_root.display().to_string());
+    arguments.push("--chdir".to_owned());
+    arguments.push(build_root.join("source").display().to_string());
+    arguments.push("--".to_owned());
+    arguments.push(cargo.to_owned());
+    arguments.extend([
+        "build".to_owned(),
+        "--release".to_owned(),
+        "--locked".to_owned(),
+        "--offline".to_owned(),
+        "--target".to_owned(),
+        contract.target.clone(),
+    ]);
+
     Ok(BuildInvocationTemplate {
-        program: toolchain.cargo_path.clone(),
-        arguments: vec![
-            "build".to_owned(),
-            "--release".to_owned(),
-            "--locked".to_owned(),
-            "--offline".to_owned(),
-            "--target".to_owned(),
-            contract.target.clone(),
-        ],
-        current_dir: source.source_path.clone(),
+        program: bubblewrap.clone(),
+        arguments,
+        current_dir: build_root.join("source"),
         clear_environment: true,
         remove_environment: contract.environment.clear_for_build.clone(),
         fixed_environment,
         network_enabled: false,
     })
+}
+
+fn sandbox_parent_directories(path: &Path) -> Vec<PathBuf> {
+    const SYSTEM_ROOTS: [&str; 6] = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/etc"];
+    if SYSTEM_ROOTS.iter().any(|root| path.starts_with(root)) {
+        return Vec::new();
+    }
+    path.ancestors()
+        .skip(1)
+        .filter(|ancestor| *ancestor != Path::new("/"))
+        .map(Path::to_path_buf)
+        .collect()
 }
 
 #[allow(clippy::too_many_arguments)]

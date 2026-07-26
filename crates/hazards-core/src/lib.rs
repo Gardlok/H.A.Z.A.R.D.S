@@ -3,6 +3,7 @@
 pub mod acquire;
 pub mod acquisition;
 pub mod build_contract;
+pub mod build_execution;
 pub mod cargo_dependency;
 pub mod doctor;
 pub mod dotfiles;
@@ -26,6 +27,10 @@ pub use build_contract::{
     BuildContractStatus, BuildDependencyEvidence, BuildEnvironmentEvidence, BuildEnvironmentProbe,
     BuildEnvironmentSpec, BuildInvocationTemplate, BuildSourceEvidence, PkgConfigEvidence,
     PkgConfigSpec, RustToolchainEvidence, SystemBuildEnvironmentProbe,
+};
+pub use build_execution::{
+    BuildExecutionLimits, BuiltArtifactEvidence, ControlledBuildOutcome, SourceBuildError,
+    SourceBuildExecutor, SourceBuildReceipt, SourceBuildResult,
 };
 pub use cargo_dependency::{
     CachedCargoDependencies, CachedCargoDependency, CargoDependencyAcquirer,
