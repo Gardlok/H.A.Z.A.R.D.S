@@ -1,12 +1,12 @@
 [
   {
-    "staging_path": "/tmp/tmp.ihRdGQYSq8/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd",
-    "source_path": "/tmp/tmp.ihRdGQYSq8/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd/alacritty-0.17.0",
-    "manifest_path": "/tmp/tmp.ihRdGQYSq8/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd/.hazards-source-preparation.json",
-    "receipt_path": "/tmp/tmp.ihRdGQYSq8/state/hazards/receipts/source-preparations/alacritty/0.17.0/1785032415-312993338-5835-0.json",
+    "staging_path": "/tmp/tmp.8EooBHu5Wg/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd",
+    "source_path": "/tmp/tmp.8EooBHu5Wg/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd/alacritty-0.17.0",
+    "manifest_path": "/tmp/tmp.8EooBHu5Wg/cache/hazards/sources/sha256/70/7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd/.hazards-source-preparation.json",
+    "receipt_path": "/tmp/tmp.8EooBHu5Wg/state/hazards/receipts/source-preparations/alacritty/0.17.0/1785032808-535759337-7323-0.json",
     "receipt": {
       "schema_version": 1,
-      "receipt_id": "1785032415-312993338-5835-0",
+      "receipt_id": "1785032808-535759337-7323-0",
       "tool_id": "alacritty",
       "version": "0.17.0",
       "artifact_sha256": "7071586605718f8b93d55e3057da6d0e863b9237a5fb7face7a72770d3dd02bd",
@@ -20,7 +20,7 @@
       "entry_count": 123,
       "expanded_size": 2328364,
       "outcome": "prepared",
-      "verified_at_unix": 1785032415
+      "verified_at_unix": 1785032808
     }
   }
 ]
