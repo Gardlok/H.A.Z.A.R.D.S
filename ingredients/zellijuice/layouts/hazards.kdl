@@ -1,4 +1,14 @@
 layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
     tab name="Code" focus=true split_direction="vertical" {
         pane name="Editor" command="hx"
         pane name="Console" size="35%" stacked=true {
