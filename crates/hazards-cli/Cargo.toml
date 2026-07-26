@@ -25,6 +25,10 @@ path = "src/bin/hazards-cargo-dependencies.rs"
 name = "hazards-build-contract"
 path = "src/bin/hazards-build-contract.rs"
 
+[[bin]]
+name = "hazards-source-build"
+path = "src/bin/hazards-source-build.rs"
+
 [dependencies]
 arsenallspice.workspace = true
 clap.workspace = true
