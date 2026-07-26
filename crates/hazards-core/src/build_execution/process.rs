@@ -196,6 +196,41 @@ pub(super) fn run_controlled(
 
     let mut outcome = outcome;
     let mut detail = detail;
+    if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
+        match (file_length(&stdout_path), file_length(&stderr_path)) {
+            (Ok(stdout), Ok(stderr))
+                if stdout.saturating_add(stderr) > limits.maximum_output_bytes =>
+            {
+                outcome = ProcessOutcome::OutputLimitExceeded;
+                detail = format!(
+                    "combined output exceeded {} bytes before process exit was observed",
+                    limits.maximum_output_bytes
+                );
+            }
+            (Ok(_), Ok(_)) => {}
+            (left, right) => {
+                let error = left.err().or_else(|| right.err()).expect("one size failed");
+                outcome = ProcessOutcome::Ambiguous;
+                detail = format!("could not observe final build output size: {error}");
+            }
+        }
+    }
+    if matches!(outcome, ProcessOutcome::Succeeded | ProcessOutcome::Failed) {
+        match directory_size_bounded(build_root, limits.maximum_build_bytes) {
+            Ok(size) if size > limits.maximum_build_bytes => {
+                outcome = ProcessOutcome::FilesystemLimitExceeded;
+                detail = format!(
+                    "build tree exceeded {} bytes before process exit was observed",
+                    limits.maximum_build_bytes
+                );
+            }
+            Ok(_) => {}
+            Err(error) => {
+                outcome = ProcessOutcome::Ambiguous;
+                detail = format!("could not observe final build-tree size: {error}");
+            }
+        }
+    }
     for path in [&stdout_path, &stderr_path] {
         if let Err(error) = cap_capture(path, limits.maximum_output_bytes) {
             outcome = ProcessOutcome::Ambiguous;

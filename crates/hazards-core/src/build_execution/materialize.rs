@@ -50,19 +50,6 @@ pub(super) fn materialize_build_inputs(
     build_root: &Path,
     maximum_build_bytes: u64,
 ) -> Result<(), SourceBuildError> {
-    match fs::symlink_metadata(build_root) {
-        Ok(_) => {
-            return Err(SourceBuildError::UnsafePath {
-                path: build_root.to_path_buf(),
-                reason: "build root already exists; refusing to reuse stale execution state"
-                    .to_owned(),
-            });
-        }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(io_error("inspect build root", build_root, error)),
-    }
-    ensure_private_directory(build_root)?;
-
     let source = contract
         .source
         .as_ref()
@@ -71,6 +58,33 @@ pub(super) fn materialize_build_inputs(
         .dependencies
         .as_ref()
         .ok_or(SourceBuildError::MissingDependencyEvidence)?;
+    let expected_build_root = paths
+        .cache
+        .join("builds")
+        .join(&source.artifact_sha256[..2])
+        .join(&source.artifact_sha256);
+    if build_root != expected_build_root {
+        return Err(SourceBuildError::UnsafePath {
+            path: build_root.to_path_buf(),
+            reason: "build root does not match the contract-bound cache path".to_owned(),
+        });
+    }
+    let build_parent = build_root.parent().ok_or_else(|| {
+        SourceBuildError::Validation("private build root has no parent".to_owned())
+    })?;
+    ensure_private_directory(build_parent)?;
+    match fs::create_dir(build_root) {
+        Ok(()) => ensure_private_directory(build_root)?,
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            return Err(SourceBuildError::UnsafePath {
+                path: build_root.to_path_buf(),
+                reason: "build root already exists; refusing concurrent or stale execution state"
+                    .to_owned(),
+            });
+        }
+        Err(error) => return Err(io_error("create private build root", build_root, error)),
+    }
+
     require_child(build_root, &invocation.current_dir, "source directory")?;
     copy_source_tree(
         &source.source_path,
