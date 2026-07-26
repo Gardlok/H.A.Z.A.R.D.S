@@ -1,10 +1,10 @@
-default_layout "hazards"
+default_layout "default"
 pane_frames true
 session_serialization true
-serialize_pane_viewport true
+pane_viewport_serialization true
 scrollback_editor "hx"
-copy_on_select false
-mouse_mode false
+copy_on_select true
+mouse_mode true
 
 themes {
     gruvbox-dark {
