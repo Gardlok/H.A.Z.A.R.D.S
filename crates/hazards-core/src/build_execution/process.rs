@@ -167,7 +167,7 @@ pub(super) fn run_controlled(
         }
         if last_size_check.elapsed() >= SIZE_POLL_INTERVAL {
             last_size_check = Instant::now();
-            let size = match directory_size_bounded(build_root, limits.maximum_build_bytes) {
+            let size = match directory_size_bounded_live(build_root, limits.maximum_build_bytes) {
                 Ok(size) => size,
                 Err(error) => {
                     let status = terminate_process_group(&mut child).ok();
@@ -251,6 +251,62 @@ pub(super) fn run_controlled(
         stderr_path,
         detail,
     })
+}
+
+fn directory_size_bounded_live(path: &Path, maximum: u64) -> Result<u64, SourceBuildError> {
+    directory_size_bounded_live_entry(path, maximum, false)
+}
+
+fn directory_size_bounded_live_entry(
+    path: &Path,
+    maximum: u64,
+    allow_missing: bool,
+) -> Result<u64, SourceBuildError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if allow_missing && error.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(io_error("inspect live build-tree entry", path, error)),
+    };
+    if metadata.file_type().is_symlink() {
+        return Err(SourceBuildError::UnsafePath {
+            path: path.to_path_buf(),
+            reason: "build tree contains a symbolic link".to_owned(),
+        });
+    }
+    if metadata.is_file() {
+        return Ok(metadata.len());
+    }
+    if !metadata.is_dir() {
+        return Err(SourceBuildError::UnsafePath {
+            path: path.to_path_buf(),
+            reason: "build tree contains a special file".to_owned(),
+        });
+    }
+
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) if allow_missing && error.kind() == io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => return Err(io_error("read live build-tree directory", path, error)),
+    };
+    let mut total = 0_u64;
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io_error("read live build-tree entry", path, error)),
+        };
+        total = total
+            .checked_add(directory_size_bounded_live_entry(
+                &entry.path(),
+                maximum,
+                true,
+            )?)
+            .ok_or_else(|| SourceBuildError::Validation("build-tree size overflowed".to_owned()))?;
+        if total > maximum {
+            return Ok(total);
+        }
+    }
+    Ok(total)
 }
 
 fn create_capture(path: &Path) -> Result<File, SourceBuildError> {
@@ -342,5 +398,32 @@ fn exit_signal(status: &ExitStatus) -> Option<i32> {
     {
         let _ = status;
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn live_size_scan_tolerates_missing_descendant() {
+        let root = tempfile::tempdir().expect("temporary root should exist");
+        let missing = root.path().join("vanished");
+
+        assert_eq!(
+            directory_size_bounded_live_entry(&missing, 1024, true)
+                .expect("missing live descendant should be ignored"),
+            0
+        );
+    }
+
+    #[test]
+    fn live_size_scan_requires_build_root() {
+        let root = tempfile::tempdir().expect("temporary root should exist");
+        let missing = root.path().join("missing-root");
+
+        let error = directory_size_bounded_live(&missing, 1024)
+            .expect_err("missing build root must remain ambiguous");
+        assert!(error.to_string().contains("inspect live build-tree entry"));
     }
 }
