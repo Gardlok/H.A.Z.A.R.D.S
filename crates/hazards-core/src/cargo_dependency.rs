@@ -118,6 +118,17 @@ pub struct CachedCargoDependencies {
     pub receipt: CargoDependencyReceipt,
 }
 
+/// Read-only verification of a complete existing Cargo dependency cache.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VerifiedCargoDependencies {
+    pub object_root: PathBuf,
+    pub manifest_path: PathBuf,
+    pub manifest_sha256: String,
+    pub packages: Vec<CachedCargoDependency>,
+    pub dependency_count: usize,
+    pub total_bytes: u64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 struct CargoDependencyManifest {
     schema_version: u8,
@@ -357,6 +368,75 @@ impl<S: CargoDependencySource> CargoDependencyAcquirer<S> {
             receipt_path,
             packages,
             receipt,
+        })
+    }
+
+    /// Revalidate an existing dependency graph without network access or receipts.
+    pub fn verify_existing(
+        &self,
+        item: &AcquisitionItem,
+    ) -> Result<VerifiedCargoDependencies, CargoDependencyError> {
+        let (artifact, source_lock) = resolve_item(item)?;
+        let prepared = SourcePreparer::new(self.cache_root.clone(), self.state_root.clone())
+            .verify_existing(item)?;
+        let lock_bytes = read_locked_file(&prepared.cargo_lock_path, source_lock)?;
+        let dependencies = parse_dependencies(
+            &lock_bytes,
+            &source_lock.package,
+            &artifact.version,
+            source_lock,
+        )?;
+        let object_root = self.cache_root.join("cargo").join("objects").join("sha256");
+        let mut packages = Vec::with_capacity(dependencies.len());
+        for dependency in &dependencies {
+            let object_path = object_root
+                .join(&dependency.checksum[..2])
+                .join(&dependency.checksum);
+            let size = verify_dependency_object(&object_path, &dependency.checksum)?;
+            packages.push(cached_dependency(
+                dependency,
+                size,
+                object_path,
+                CargoDependencyOutcome::CacheHit,
+            ));
+        }
+        let manifest = CargoDependencyManifest {
+            schema_version: MANIFEST_SCHEMA_VERSION,
+            tool_id: item.id.clone(),
+            version: item.target_version.clone(),
+            artifact_sha256: artifact.sha256.clone(),
+            cargo_lock_sha256: source_lock.cargo_lock_sha256.clone(),
+            cargo_lock_version: source_lock.cargo_lock_version,
+            package_count: source_lock.package_count,
+            dependency_count: packages.len(),
+            packages: packages
+                .iter()
+                .map(|package| CargoDependencyManifestEntry {
+                    name: package.name.clone(),
+                    version: package.version.clone(),
+                    checksum: package.checksum.clone(),
+                    source_url: package.source_url.clone(),
+                    size: package.size,
+                })
+                .collect(),
+        };
+        let manifest_path = self
+            .cache_root
+            .join("cargo")
+            .join("dependency-graphs")
+            .join("sha256")
+            .join(&source_lock.cargo_lock_sha256[..2])
+            .join(format!("{}.json", source_lock.cargo_lock_sha256));
+        let encoded = encode_json(&manifest)?;
+        validate_manifest_file(&manifest_path, &manifest, &encoded)?;
+        let total_bytes = packages.iter().map(|package| package.size).sum();
+        Ok(VerifiedCargoDependencies {
+            object_root,
+            manifest_path,
+            manifest_sha256: hash_bytes(&encoded),
+            dependency_count: packages.len(),
+            total_bytes,
+            packages,
         })
     }
 
