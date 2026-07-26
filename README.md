@@ -88,6 +88,12 @@ $ cargo run -p hazards-cli --bin hazards-build-contract -- \
     --host desktop \
     --persistence local \
     --role development
+$ cargo run -p hazards-cli --bin hazards-source-build -- \
+    --tool alacritty \
+    --host desktop \
+    --persistence local \
+    --role development \
+    --confirm 'sha256:<current-contract-digest>'
 $ cargo run -p hazards-cli -- provision materialize \
     --tool zellij \
     --host desktop \
@@ -227,6 +233,22 @@ deterministic SHA-256 binding the verified inputs, exact toolchain, native evide
 controlled environment, and a future offline Cargo invocation template. The template
 is evidence only: Cargo, build scripts, compilers, linkers, installers, and activation
 remain disabled.
+
+`hazards-source-build` is the confirmed execution boundary. It recomputes the entire
+contract immediately before mutation and refuses a stale `sha256:<digest>` approval.
+Source and every verified dependency are copied into a new private build root. Cargo
+consumes a HAZARDS-generated vendor tree and runs through the exact pinned Bubblewrap
+executable with private user, PID, network, IPC, and UTS namespaces. System and
+toolchain paths are read-only, the caller's home directory is absent, networking is
+disabled at the kernel and Cargo layers, and only the private build root is writable.
+
+Execution uses a cleared environment, direct argument vectors, a dedicated process
+group, and bounded time, output, and build-tree size. HAZARDS recomputes the contract
+after execution, then verifies the expected ELF path, executable mode, target machine,
+size, and SHA-256. Accepted results enter a content-addressed build-result store with
+append-only logs and receipts. Ambiguous effects are preserved for inspection and are
+never replayed automatically. The result remains inert: this command does not install,
+activate, publish, or modify `PATH`.
 
 `hazards provision materialize` is the next deliberately narrow mutation. It
 requires the same explicit selection, rehashes the locked cache object, and
@@ -375,6 +397,12 @@ moustache.
 - [Verified Dotter preview decision](docs/adr/0008-verified-dotter-preview.md)
 - [Transactional Dotter deployment decision](docs/adr/0009-transactional-dotter-deployment.md)
 - [Transitive source-build planning decision](docs/adr/0010-transitive-source-build-plan.md)
+- [Controlled source preparation decision](docs/adr/0011-controlled-source-preparation.md)
+- [Offline Cargo dependency cache decision](docs/adr/0012-offline-cargo-dependency-cache.md)
+- [Pinned source-build contract decision](docs/adr/0013-pinned-source-build-contract.md)
+- [Controlled source-build decision](docs/adr/0014-controlled-source-build.md)
+- [Pinned build-contract operator guide](docs/BUILD_CONTRACT.md)
+- [Controlled source-build operator guide](docs/SOURCE_BUILD.md)
 
 ## Status
 
@@ -385,7 +413,9 @@ functional. Transactional installation and rollback of locked prebuilt
 applications, profile-aware Dotter generation, and verified deployment dry-runs
 are also functional. Read-only adoption planning, confirmed transactional
 Dotter deployment, automatic recovery, and explicit rollback are functional.
-Read-only inspection of checksum-locked Cargo dependency graphs is functional;
-source extraction, dependency retrieval, compilation, and activation remain
-future boundaries. SurrealDB runtime wiring, Zellij automation, and the Ratatui
-Arsenal interface follow in later phases.
+Read-only inspection of checksum-locked Cargo dependency graphs, controlled
+source preparation, offline dependency caching, pinned build-contract inspection,
+sandboxed source-build execution, ELF result verification, and append-only build
+evidence are functional. Source-built result installation, signed provenance,
+SurrealDB runtime wiring, Zellij automation, and the Ratatui Arsenal interface follow
+in later phases.
